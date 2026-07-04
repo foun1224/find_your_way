@@ -4,14 +4,16 @@ import FindYourWayCore
 
 /// 透明無邊框置頂懸浮視窗，套用 `PetWindowConfig` 的設定值（照 `04` §2.2）。
 ///
-/// **ADR-011（拖曳 + 記住位置）**：抓住角色拖曳可移動整個視窗。這個視窗只在游標命中角色時
-/// 才會 `ignoresMouseEvents == false`（`ClickThroughController`），所以本類攔截到的
-/// `leftMouseDown`/`leftMouseDragged`/`leftMouseUp` 一定發生在角色上——不需要再額外 hit-test，
-/// 背景透明區依然完全點擊穿透（ADR-002 非侵入不變）。
+/// **ADR-011（拖曳 + 記住位置，2026-07-04 更新「背景也可以拖曳」）**：整個視窗（含背景）都能
+/// 抓拖。`ClickThroughController` 現在只要游標在視窗 frame 內就設 `ignoresMouseEvents == false`，
+/// 所以本類攔截到的 `leftMouseDown`/`leftMouseDragged`/`leftMouseUp` 可能發生在角色上、也可能
+/// 在背景——因此放開時（未拖曳的短按分支）需要額外對放開位置做角色 hit-test（見
+/// `characterHitTest`），才能分流「角色→暖心回應」「背景→無作用、吃掉不穿透」。
 ///
 /// click-vs-drag 用移動距離門檻區分（`WindowDragGesture`，Core 純函式、可測）：放開時位移
-/// 小於門檻＝點擊（呼叫 `onCharacterClicked` 觸發暖心回應，ADR-006 不變）；超過門檻＝拖曳
-/// （視窗跟著游標即時移動，放開時透過 `onWindowDragEnded` 回報最終 origin 供外部存偏好）。
+/// 小於門檻＝短按——命中角色才呼叫 `onCharacterClicked`（觸發暖心回應，ADR-006 不變），命中
+/// 背景則什麼都不做；超過門檻＝拖曳（任一處皆可，視窗跟著游標即時移動，放開時透過
+/// `onWindowDragEnded` 回報最終 origin 供外部存偏好）。
 final class PetWindow: NSWindow {
 
     private let skView: SKView
@@ -22,10 +24,14 @@ final class PetWindow: NSWindow {
     /// 這次按下-放開，是否已經被判定為「拖曳」（超過門檻後就不會變回點擊）。
     private var isDraggingWindow = false
 
-    /// 確定是「點擊」（放開時位移 < 門檻）時呼叫，供外部觸發暖心回應（ADR-006）。
+    /// 確定是「點擊」（放開時位移 < 門檻）且命中角色時呼叫，供外部觸發暖心回應（ADR-006）。
     var onCharacterClicked: (() -> Void)?
     /// 確定是「拖曳」且已放開時呼叫，帶上最終 origin，供外部存到偏好（ADR-011）。
     var onWindowDragEnded: ((CGPoint) -> Void)?
+    /// 判斷「視窗座標系」中的一點是否落在角色命中框內（外部注入，通常是
+    /// `GameScene.isPointOnCharacter`，底層共用 `CharacterHitTest` 純函式）。
+    /// 短按放開時用它分流角色（暖心回應）vs 背景（無作用），ADR-011 2026-07-04 更新。
+    var characterHitTest: ((CGPoint) -> Bool)?
 
     init(contentRect: CGRect) {
         skView = SKView(frame: CGRect(origin: .zero, size: contentRect.size))
@@ -116,7 +122,9 @@ final class PetWindow: NSWindow {
         if isDraggingWindow {
             isDraggingWindow = false
             onWindowDragEnded?(frame.origin)
-        } else {
+        } else if characterHitTest?(event.locationInWindow) == true {
+            // 短按命中角色 → 暖心回應（ADR-006）。命中背景則什麼都不做——
+            // 整窗互動化後背景不再穿透（ADR-011 更新），但也不應誤觸暖心回應。
             onCharacterClicked?()
         }
     }

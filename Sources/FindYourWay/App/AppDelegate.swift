@@ -53,12 +53,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = PetWindow(contentRect: frame)
         window.presentScene(scene)
         window.showWithoutActivating()
-        // ADR-011：角色上放開時位移<門檻＝點擊 → 暖心回應；超過門檻＝拖曳 → 存記憶位置。
+        // ADR-011（2026-07-04 更新）：整窗放開時位移<門檻＝短按——短按分流靠
+        // `characterHitTest`（命中角色才觸發暖心回應，背景短按無作用）；超過門檻＝拖曳
+        // （任一處皆可）→ 存記憶位置。
         window.onCharacterClicked = { [weak self] in
             self?.gameScene?.triggerWarmResponseFromConfirmedClick()
         }
         window.onWindowDragEnded = { [weak self] origin in
             self?.preferencesStore.setWindowOrigin(origin)
+        }
+        window.characterHitTest = { [weak self] pointInWindow in
+            self?.gameScene?.isPointOnCharacter(pointInWindow) ?? false
         }
         petWindow = window
 
