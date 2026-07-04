@@ -23,6 +23,10 @@ KINGDOM_CHARACTERS_SHEET = os.path.join(REPO_ROOT, "design", "kingdom_characters
 SEA_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sea_city.png")
 # 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：主角/旅伴/草原三份新素材表。
 MAIN_ROLE_SHEET = os.path.join(REPO_ROOT, "design", "main_role.png")
+# 主角走路循環圖（Fable 產出，取代 main_role.png 向右列的舊 3 姿勢）：上排「走路(Walk)」
+# 8 幀，側視朝右、左右腳明確交替的完整循環；下排「待機(Idle)」本波不用（待機仍讀
+# main_role.png 的「向前」欄，見 `MAIN_ROLE_FRONT_ROWS`）。
+MAIN_ROLE_WALK_SHEET = os.path.join(REPO_ROOT, "design", "main_role_walk.png")
 RESOURCE_V2_SHEET = os.path.join(REPO_ROOT, "design", "resource_v2.png")
 GRASSLAND_SHEET = os.path.join(REPO_ROOT, "design", "grassland.png")
 # 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4「其餘地域切圖」）：5 個新地域素材表，
@@ -631,6 +635,25 @@ MAIN_ROLE_FRONT_ROWS = [
     Region(x=840, y=185, w=200, h=260),
     Region(x=840, y=465, w=200, h=250),
     Region(x=840, y=725, w=200, h=245),
+]
+
+# `main_role_walk.png`（1536x1024，深紫底）版面：上排「走路(Walk)」8 幀（側視朝右，
+# 左右腳明確交替的完整循環，標號 1~8）、下排「待機(Idle)」4 幀（本波不用）。取代
+# `MAIN_ROLE_RIGHT_ROWS`（原本從 `main_role.png` 切 3 個靜態姿勢當「走路」，腳步不連續）。
+# 座標由逐像素亮度掃描校準（見 scratchpad 校準紀錄）：
+#   Walk 排內容 y=194..431（8 個字元 bounding box 在此 y 帶內），扣掉下方標號列（y=455..476）
+#   與上方「走路(Walk)」標題（y=96..150）後，取 y=186..439（上下各留 8px 餘裕）。
+#   8 幀 x 範圍（逐欄亮度掃描，欄間最窄間隙僅 5~8px，故每幀左右餘裕依實際間隙動態調整，
+#   避免相鄰幀被框進來）：
+MAIN_ROLE_WALK_ROW = [
+    Region(x=25, y=186, w=199, h=254),
+    Region(x=228, y=186, w=186, h=254),
+    Region(x=416, y=186, w=189, h=254),
+    Region(x=611, y=186, w=179, h=254),
+    Region(x=791, y=186, w=180, h=254),
+    Region(x=974, y=186, w=182, h=254),
+    Region(x=1156, y=186, w=175, h=254),
+    Region(x=1332, y=186, w=176, h=254),
 ]
 
 
@@ -1278,7 +1301,15 @@ def main() -> None:
                 if (_f.startswith("right_") or _f.startswith("front_")) and _f.endswith(".png"):
                     os.remove(os.path.join(char_dir, _f))
 
-        hero_frames = slice_main_role_column(main_role_sheet, MAIN_ROLE_RIGHT_ROWS)
+        # 走路 8 幀改讀 `main_role_walk.png`（真正的走路循環，取代舊的 3 靜態姿勢）；
+        # 若走路循環圖不存在則退回舊 `main_role.png` 3 姿勢（向後相容）。
+        if os.path.exists(MAIN_ROLE_WALK_SHEET):
+            main_role_walk_sheet = decode_png(MAIN_ROLE_WALK_SHEET)
+            print(f"main_role_walk_sheet: {main_role_walk_sheet.width}x{main_role_walk_sheet.height}")
+            hero_frames = slice_main_role_column(main_role_walk_sheet, MAIN_ROLE_WALK_ROW)
+        else:
+            print(f"note: {MAIN_ROLE_WALK_SHEET} not found, falling back to {MAIN_ROLE_SHEET} right rows")
+            hero_frames = slice_main_role_column(main_role_sheet, MAIN_ROLE_RIGHT_ROWS)
         hero_frames = pad_to_common_size(hero_frames)
         for i, frame in enumerate(hero_frames):
             out_path = os.path.join(char_dir, f"right_{i}.png")
