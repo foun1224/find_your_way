@@ -12,6 +12,10 @@ public final class GameScene: SKScene {
     public static let tickInterval: Double = 2.0
 
     private var character: CharacterNode?
+    /// 主角獨行（ADR-004 2026-07-05 更新）：`false` 時不生成同行旅伴、不觸發相遇 peak/toast、
+    /// companion 類相遇卡維持關閉。CompanionNode 類與素材保留休眠，改回 `true` 即可重新啟用同行。
+    private static let companionEnabled = false
+
     private var companion: CompanionNode?
     private var landmarkNodes: [String: SKNode] = [:]
 
@@ -189,7 +193,8 @@ public final class GameScene: SKScene {
         scheduleNextHeroRest()
 
         // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
-        if gameState.companionJoined {
+        // 主角獨行模式（companionEnabled == false）下略過，即使舊存檔 companionJoined 為 true。
+        if Self.companionEnabled, gameState.companionJoined {
             addCompanionNodeIfNeeded(animateIn: false)
         }
     }
@@ -591,7 +596,7 @@ public final class GameScene: SKScene {
         let crossedChapters = GrowthStage.chaptersCrossed(from: oldDistance, to: gameState.distance)
 
         var toastDelay: TimeInterval = 0
-        if companionJustJoined {
+        if Self.companionEnabled, companionJustJoined {
             presentCompanionMeetPeak()
             toastDelay += 3.0
         }
@@ -607,7 +612,7 @@ public final class GameScene: SKScene {
         // 相遇卡（Stage A，`16` §2.3）：疊加的無盡氛圍層，與上面的 story beats 並存、不搶戲。
         // `motionEnabled == false` 時不冒卡（`16` §4「受 motionEnabled 控制」）。
         if motionEnabled {
-            for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance, companionMet: gameState.companionJoined) {
+            for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined) {
                 scheduleJourneyLog(text: card.logText, after: toastDelay)
                 toastDelay += 3.0
             }
@@ -863,14 +868,14 @@ public final class GameScene: SKScene {
         // 離線回歸的相遇卡摘要（`16` §2.3）：挑最後 1–2 張以「路過了…」呈現，不逐一列出、
         // 不做錯過清單（守低喚醒/零功利）。`motionEnabled == false` 時不呈現。
         if motionEnabled {
-            let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance, companionMet: gameState.companionJoined)
+            let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined)
             for card in crossed.suffix(2) {
                 scheduleJourneyLog(text: "你不在時，路過了…\(card.logText)", after: delay)
                 delay += 3.0
             }
         }
 
-        if outcome.companionJustJoined {
+        if Self.companionEnabled, outcome.companionJustJoined {
             let wait = SKAction.wait(forDuration: delay)
             let peak = SKAction.run { [weak self] in self?.presentCompanionMeetPeak() }
             run(SKAction.sequence([wait, peak]))
