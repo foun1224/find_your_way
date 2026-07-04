@@ -65,11 +65,16 @@ cp "${ICON_PATH}" "${RESOURCES_DIR}/${ICON_FILE}"
 
 # ---- 像素美術（Phase 4a，`12` §1/§2；由 scripts/slice_assets.py 重生，非版控）----
 ART_DIR="${ROOT_DIR}/Resources/art"
+# 若美術尚未切出（gitignore、非版控——例如剛 clone），自動先跑切圖，避免 build 出無美術的 App。
+if [ ! -d "${ART_DIR}" ] && [ -f "${ROOT_DIR}/design/assets/asset_sheet.png" ]; then
+    echo "==> Resources/art not found — running slice_assets.py to generate it"
+    python3 "${ROOT_DIR}/scripts/slice_assets.py" || echo "==> warning: slice_assets.py failed" >&2
+fi
 if [ -d "${ART_DIR}" ]; then
     echo "==> copying art (${ART_DIR}) into bundle"
     cp -R "${ART_DIR}" "${RESOURCES_DIR}/art"
 else
-    echo "==> warning: ${ART_DIR} not found — run 'python3 scripts/slice_assets.py' first (app will fall back to placeholder art)" >&2
+    echo "==> warning: ${ART_DIR} not found — app will fall back to placeholder art" >&2
 fi
 
 cat > "${CONTENTS_DIR}/Info.plist" <<PLIST
