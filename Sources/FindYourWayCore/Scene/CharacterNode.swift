@@ -18,6 +18,9 @@ public final class CharacterNode: SKSpriteNode {
     /// 走路 frame 節奏（每格秒數），對應 6–8fps 的悠閒感（1/7 秒 ≈ 7fps）。
     private static let stepInterval: TimeInterval = 1.0 / 7.0
 
+    /// 暖心回應動作 key（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不影響任何邏輯狀態）。
+    private static let warmResponseKey = "warmResponse"
+
     /// 找不到美術時的佔位色塊邊長（沿用 Phase 1 尺寸）。
     private static let fallbackSize: CGFloat = 32
 
@@ -59,5 +62,47 @@ public final class CharacterNode: SKSpriteNode {
         }
         let animate = SKAction.animate(with: textures, timePerFrame: Self.stepInterval, resize: false, restore: false)
         run(SKAction.repeatForever(animate), withKey: "walkCycle")
+    }
+
+    /// 點角色 → 暖心回應（Phase 4d，`12` §5 / ADR-006 嚴格零功利）：一次溫和、慢、無 jolt 的
+    /// 「注意到你了」小動作（輕輕一跳 + 放大再收）+ 一圈極淡暖光，數幀內就散。
+    ///
+    /// **絕對不**碰 `GameState`、不給任何資源/加速/解鎖——純表達，呼叫端（`GameScene`）
+    /// 負責防連點節流；本方法本身也會擋掉「動作還在播放中」的重疊觸發，避免洗版式抖動。
+    public func playWarmResponse() {
+        guard action(forKey: Self.warmResponseKey) == nil else { return }
+
+        let hopUp = SKAction.moveBy(x: 0, y: 5, duration: 0.3)
+        hopUp.timingMode = .easeOut
+        let hopDown = SKAction.moveBy(x: 0, y: -5, duration: 0.4)
+        hopDown.timingMode = .easeInEaseOut
+        let hop = SKAction.sequence([hopUp, hopDown])
+
+        let growUp = SKAction.scale(to: 1.05, duration: 0.3)
+        growUp.timingMode = .easeOut
+        let shrink = SKAction.scale(to: 1.0, duration: 0.4)
+        shrink.timingMode = .easeInEaseOut
+        let pulse = SKAction.sequence([growUp, shrink])
+
+        run(SKAction.group([hop, pulse]), withKey: Self.warmResponseKey)
+        playWarmGlow()
+    }
+
+    /// 極淡暖光（可選 polish，`12` §5）：短暫、克制，不搶過角色本體的辨識度（`03` §2.4 原則）。
+    private func playWarmGlow() {
+        let glow = SKShapeNode(circleOfRadius: Double(size.height) * 0.55)
+        glow.position = CGPoint(x: 0, y: Double(size.height) * 0.5)
+        glow.zPosition = -1
+        glow.fillColor = Palette.warmSunGold.skColor
+        glow.strokeColor = .clear
+        glow.alpha = 0
+        addChild(glow)
+
+        let fadeIn = SKAction.fadeAlpha(to: 0.22, duration: 0.35)
+        fadeIn.timingMode = .easeOut
+        let hold = SKAction.wait(forDuration: 0.25)
+        let fadeOut = SKAction.fadeOut(withDuration: 0.6)
+        let remove = SKAction.removeFromParent()
+        glow.run(SKAction.sequence([fadeIn, hold, fadeOut, remove]))
     }
 }

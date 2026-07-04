@@ -1,5 +1,8 @@
 import Foundation
 import SpriteKit
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Phase 2 場景：消費 `GameState`，世界依里程捲動（ADR-009），回歸時播離線呈現。
 /// 照 `04` §2.3：`backgroundColor = .clear`、`scaleMode = .resizeFill`。
@@ -30,6 +33,12 @@ public final class GameScene: SKScene {
     private var lastUpdateTime: TimeInterval?
     private var timeSinceLastTick: Double = 0
     private var pendingOutcome: OfflineOutcome?
+
+    // MARK: - 點角色微互動（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不入 `GameState`）
+
+    /// 防連點節流：避免狂點洗版式重複觸發動畫（不是「不能點」，只是同一瞬間只播一次）。
+    private static let warmResponseCooldown: TimeInterval = 0.6
+    private var lastWarmResponseTime: TimeInterval = -1000
 
     private let rules: SimulationRules
     private let timeProvider: TimeProvider
@@ -566,5 +575,43 @@ public final class GameScene: SKScene {
         let glowFadeOut = SKAction.fadeOut(withDuration: 2.0)
         let glowRemove = SKAction.removeFromParent()
         glow.run(SKAction.sequence([glowFadeIn, glowLinger, glowFadeOut, glowRemove]))
+    }
+
+    // MARK: - 點角色微互動（Phase 4d，`12` §5 / `04` §2.5 策略 B / ADR-006 嚴格零功利）
+
+    /// 判定（場景座標，左下原點，與 window/SKView 座標系一致）某點是否落在角色命中框內。
+    /// 純幾何委派給 `CharacterHitTest`（可測），本方法只負責取「目前角色的實際位置/尺寸」這個
+    /// 有狀態的部分。同時供本類 `mouseDown` 與執行檔層 `ClickThroughController`（動態穿透切換）
+    /// 共用同一份判斷，避免「游標變手型的範圍」與「實際點得到的範圍」兜不起來。
+    public func isPointOnCharacter(_ point: CGPoint) -> Bool {
+        guard let character else { return false }
+        return CharacterHitTest.isPointOnCharacter(
+            point: point,
+            characterScreenX: Double(character.position.x),
+            characterScreenY: Double(character.position.y),
+            characterSize: character.size,
+            sceneSize: size
+        )
+    }
+
+    #if canImport(AppKit)
+    /// 點角色 → 暖心回應（ADR-006 嚴格零功利：純情感，不碰 `GameState`/存檔/模擬）。
+    /// 只有 `ClickThroughController` 已把 `window.ignoresMouseEvents` 切為 `false`（游標正好在
+    /// 角色上）時，這個事件才可能發生；這裡仍再做一次 hit-test 作為保險（防止未來視窗設定變動
+    /// 讓非角色範圍的點擊漏進來）。
+    public override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        let point = event.location(in: self)
+        guard isPointOnCharacter(point) else { return }
+        triggerWarmResponse()
+    }
+    #endif
+
+    /// 防連點節流（不是「不能點」，是同一瞬間只播一次，避免洗版式重複動畫）。
+    private func triggerWarmResponse() {
+        let now = timeProvider.now
+        guard now - lastWarmResponseTime >= Self.warmResponseCooldown else { return }
+        lastWarmResponseTime = now
+        character?.playWarmResponse()
     }
 }

@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var gameScene: GameScene?
     private var statusItemController: StatusItemController?
     private var preferencesWindowController: PreferencesWindowController?
+    /// Phase 4d 點角色微互動（`12` §5 / `04` §2.5 策略 B）：動態點擊穿透 + 手型 signifier。
+    private var clickThroughController: ClickThroughController?
 
     private let timeProvider: TimeProvider = SystemTimeProvider()
     private let saveStore = SaveStore(paths: SavePaths())
@@ -66,6 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusItem.install()
         statusItemController = statusItem
+
+        let clickThrough = ClickThroughController(window: window, sceneProvider: { [weak self] in self?.gameScene })
+        clickThrough.start()
+        clickThroughController = clickThrough
 
         applyMotionPreference()
         setUpPowerObservers()
