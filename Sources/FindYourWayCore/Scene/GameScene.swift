@@ -119,6 +119,12 @@ public final class GameScene: SKScene {
             guard motionEnabled != oldValue else { return }
             character?.reducedMotion = !motionEnabled
             companion?.reducedMotion = !motionEnabled
+            for visuals in [currentRegionVisuals, nextRegionVisuals] {
+                guard let visuals else { continue }
+                for (node, _) in visuals.npcNodes {
+                    node.reducedMotion = !motionEnabled
+                }
+            }
         }
     }
 
@@ -159,7 +165,7 @@ public final class GameScene: SKScene {
 
     private func buildScene() {
         let initialRegion = Self.debugRegionOverride() ?? Region.at(distance: displayedDistance)
-        if let visuals = ParallaxBackground.buildRegion(initialRegion.assetFolder, in: self, size: size) {
+        if let visuals = ParallaxBackground.buildRegion(initialRegion.assetFolder, in: self, size: size, reducedMotion: !motionEnabled) {
             currentRegionVisuals = visuals
             currentRegionType = initialRegion
         } else {
@@ -320,15 +326,19 @@ public final class GameScene: SKScene {
         let clampedDt = min(frameDt, Self.maxFrameDt)
         displayedDistance += rules.speed * clampedDt
 
-        // 極小漂移校正（安全網）：`displayedDistance`（每幀累加、clamp 過）與 `gameState.distance`
-        // （`performTick` 每 2 秒用未 clamp 的 `timeSinceLastTick` 一次算出）理論上是同一條積分曲線，
-        // 正常情況下落差趨近 0；只有掉幀/尖峰被 `maxFrameDt` clamp 掉的極端情況才會有微小落差。
-        // 用比例增益連續收斂（每秒收斂 `driftCorrectionGain` 比例，非硬設瞬間對齊），確保不會產生
-        // 可見跳動——這也是為什麼移除了舊版 `performTick` 裡「把 `displayedDistance` 設成
-        // `gameState.distance`」那行（那正是造成 2 秒跳格的來源）。
+        // 漂移校正只在「真脫節」時介入，且留一個死區——這是修「頓格」的關鍵。
+        // `displayedDistance` 每幀等速推進（= 平滑）；`gameState.distance` 每 2 秒才跳一次（階梯）。
+        // 兩者本是同一條 speed×時間 積分曲線、只差取樣頻率，故正常運行時 displayed 會固定「領先」
+        // gameState 最多一個 tick 份（speed×tickInterval ≈ 24 單位）——這是正常相位差，不該校正。
+        // 舊版每幀把 displayed 拉向階梯狀的 gameState，等於在每個 2 秒週期內把它拉停再放竄，
+        // 產生可見的「滑—停—竄」脈動（頓格）。改為：只有 |drift| 超過死區容差（1.5 個 tick 份）
+        // 才視為真脫節（掉幀被 `maxFrameDt` clamp 累積、或閒置/離線邊界），且只柔和收斂「超出死區
+        // 的部分」；正常運行 → 不校正 → 等速平滑、無脈動。
         let drift = gameState.distance - displayedDistance
-        if drift != 0 {
-            displayedDistance += drift * min(1.0, Self.driftCorrectionGain * clampedDt)
+        let driftTolerance = rules.speed * Self.tickInterval * 1.5
+        if abs(drift) > driftTolerance {
+            let excess = drift - (drift > 0 ? driftTolerance : -driftTolerance)
+            displayedDistance += excess * min(1.0, Self.driftCorrectionGain * clampedDt)
         }
 
         applyWorldScroll(distance: displayedDistance)
@@ -717,6 +727,10 @@ public final class GameScene: SKScene {
         for (node, slot) in visuals.propNodes {
             node.position.x = CGFloat(PropScatter.screenX(for: slot, distance: distance))
         }
+
+        for (node, slot) in visuals.npcNodes {
+            node.position.x = CGFloat(KingdomNpcScatter.screenX(for: slot, distance: distance))
+        }
     }
 
     /// 地域切換 + Blend Zone crossfade 的核心（`18` §3）：依 `Region.blend(atDistance:)`（純函式）
@@ -771,7 +785,7 @@ public final class GameScene: SKScene {
         }
         if nextRegionType != blend.to {
             nextRegionVisuals?.container.removeFromParent()
-            nextRegionVisuals = ParallaxBackground.buildRegion(blend.to.assetFolder, in: self, size: size)
+            nextRegionVisuals = ParallaxBackground.buildRegion(blend.to.assetFolder, in: self, size: size, reducedMotion: !motionEnabled)
             nextRegionVisuals?.container.zPosition = Self.nextRegionZOffset
             nextRegionType = blend.to
         }
@@ -781,7 +795,7 @@ public final class GameScene: SKScene {
 
     private func replaceCurrentRegion(with region: RegionType) {
         currentRegionVisuals?.container.removeFromParent()
-        currentRegionVisuals = ParallaxBackground.buildRegion(region.assetFolder, in: self, size: size)
+        currentRegionVisuals = ParallaxBackground.buildRegion(region.assetFolder, in: self, size: size, reducedMotion: !motionEnabled)
         currentRegionVisuals?.container.zPosition = 0
         currentRegionType = region
     }

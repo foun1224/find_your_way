@@ -544,6 +544,33 @@ def _apply_exclude_rects(img: Image, rects: list) -> Image:
     return out
 
 
+# 王國市民 NPC（Stage B+ 社會臨場感）：素材表左下角「角色（像素風）」區塊三種角色
+# （王國士兵/王國衛兵隊長/王國貴族·公主）各只取「向前」列第 1 格當代表幀（純裝飾站立姿，
+# 不需要整組走路循環）。座標為逐像素校準：先框住整排「向前」四向列（y=815..935），
+# 再在該列裡框住每種角色最左邊一格，刻意避開左側列標籤文字（"向前" 中文字樣）與右側鄰居角色。
+KINGDOM_NPC_REGIONS: dict = {
+    "soldier": Region(x=85, y=815, w=95, h=120),
+    "guard": Region(x=430, y=815, w=100, h=120),
+    "noble": Region(x=735, y=815, w=85, h=120),
+}
+
+
+def slice_kingdom_npcs(sheet: Image) -> dict:
+    """王國市民 NPC 代表幀切圖：與 `slice_kingdom_props` 同一套去背流程，只是本體是單一
+    連通角色（無細長分離部件），套用 `keep_largest_component` 去掉框到的鄰居殘影/標籤文字碎片。
+    """
+    out = {}
+    for name, region in KINGDOM_NPC_REGIONS.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        keyed = chroma_key_flood(cropped, threshold=28)
+        keyed = despeckle_neutral_residue(keyed)
+        keyed = keep_largest_component(keyed)
+        out[name] = autocrop(keyed)
+    return out
+
+
 def slice_kingdom_props(sheet: Image) -> dict:
     """王國道具切圖：與 `slice_props` 同一套去背流程，座標表換成 `KINGDOM_PROP_REGIONS`
     （`18` §1）；去雜點/去鄰居碎片策略見 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明。"""
@@ -671,6 +698,13 @@ def main() -> None:
         kingdom_props_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "props")
         for name, img in kingdom_props.items():
             out_path = os.path.join(kingdom_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        kingdom_npcs = slice_kingdom_npcs(kingdom_sheet)
+        kingdom_npc_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "npc")
+        for name, img in kingdom_npcs.items():
+            out_path = os.path.join(kingdom_npc_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:

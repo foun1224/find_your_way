@@ -33,6 +33,9 @@ public enum ParallaxBackground {
         public let container: SKNode
         public let layers: [SceneryLayer]
         public let propNodes: [(node: SKSpriteNode, slot: PropScatter.Slot)]
+        /// 市民 NPC 節點（Stage B+，`02` §2 社會臨場感）：只有王國地域非空，草原等地域固定為 `[]`
+        /// （`KingdomNpcScatter.slots(for:)` 對非王國地域回傳空陣列）。
+        public let npcNodes: [(node: NpcNode, slot: KingdomNpcScatter.Slot)]
     }
 
     /// 地面平台的顯示高度（點）：作為整組背景的「主尺度」，遠景/中景/前景依同一縮放比例換算，
@@ -55,7 +58,12 @@ public enum ParallaxBackground {
     /// 為必要層，找不到任一張即回傳 `nil`（呼叫端優雅降級）；`fore` 為選用層（草原沒有前景層，
     /// 王國有旗幟石牆層——`18` §3「有 fore 的地域多一層、沒有的略過」）。
     @discardableResult
-    public static func buildRegion(_ regionFolder: String, in parent: SKNode, size: CGSize) -> RegionVisuals? {
+    public static func buildRegion(
+        _ regionFolder: String,
+        in parent: SKNode,
+        size: CGSize,
+        reducedMotion: Bool = false
+    ) -> RegionVisuals? {
         let base = "regions/\(regionFolder)/bg/"
         guard
             let groundTexture = ArtCatalog.texture(relativePath: base + "ground.png"),
@@ -107,8 +115,9 @@ public enum ParallaxBackground {
         layers.append(far)
 
         let propNodes = buildPropNodes(regionFolder: regionFolder, in: container)
+        let npcNodes = buildNpcNodes(regionFolder: regionFolder, in: container, reducedMotion: reducedMotion)
 
-        return RegionVisuals(container: container, layers: layers, propNodes: propNodes)
+        return RegionVisuals(container: container, layers: layers, propNodes: propNodes, npcNodes: npcNodes)
     }
 
     /// 近景散落道具（Phase 4b `12` §2/§6，Stage B 地域化 `18` §3）：純裝飾，位置由
@@ -125,6 +134,30 @@ public enum ParallaxBackground {
             node.anchorPoint = CGPoint(x: 0.5, y: 0)
             node.position.y = Double(groundDisplayHeight)
             node.zPosition = -1 // 地面之前、角色/旅伴之後（近景裝飾，`12` §2）。
+            container.addChild(node)
+            result.append((node: node, slot: slot))
+        }
+        return result
+    }
+
+    /// 王國市民 NPC（Stage B+，`02` §2 社會臨場感）：純裝飾，位置由 `KingdomNpcScatter.slots(for:)`
+    /// （純函式）決定，依 distance 捲動；找不到某 NPC 美術時該槽位就不放（優雅降級，不 crash）。
+    /// 非王國地域槽位表為空，自然不會冒出任何節點。
+    private static func buildNpcNodes(
+        regionFolder: String,
+        in container: SKNode,
+        reducedMotion: Bool
+    ) -> [(node: NpcNode, slot: KingdomNpcScatter.Slot)] {
+        let region = RegionType.allCases.first { $0.assetFolder == regionFolder } ?? .meadowOrigin
+        var result: [(node: NpcNode, slot: KingdomNpcScatter.Slot)] = []
+        for slot in KingdomNpcScatter.slots(for: region) {
+            guard let texture = ArtCatalog.texture(relativePath: "regions/\(regionFolder)/npc/\(slot.npcName).png") else { continue }
+            // 確定性相位偏移（非隨機）：讓不同槽位的呼吸起伏不完全同步，見 `NpcNode` 說明。
+            let phaseOffset = slot.baseX.truncatingRemainder(dividingBy: NpcNode.breathPeriodSeconds)
+            let node = NpcNode(texture: texture, reducedMotion: reducedMotion, breathPhaseOffset: phaseOffset)
+            node.anchorPoint = CGPoint(x: 0.5, y: 0)
+            node.position.y = Double(groundDisplayHeight)
+            node.zPosition = -1 // 地面之前、角色/旅伴之後（近景裝飾，同道具層次）。
             container.addChild(node)
             result.append((node: node, slot: slot))
         }
