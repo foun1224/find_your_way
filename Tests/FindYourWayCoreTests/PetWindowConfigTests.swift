@@ -51,6 +51,33 @@ final class PetWindowConfigTests: XCTestCase {
         XCTAssertEqual(origin.y, visibleFrame.minY + margin.height, accuracy: 0.0001)
     }
 
+    func testReanchorsAfterScreenParametersChange_externalMonitorRemoved() {
+        // 模擬「原本橫跨外接大螢幕，拔掉後主螢幕變小」的螢幕參數變更（`10` §7）：
+        // 重新以新的 visibleFrame 計算，桌寵應落在新螢幕右下角、不越界、不殘留舊座標。
+        let externalVisibleFrame = CGRect(x: 0, y: 0, width: 3440, height: 1440)
+        let windowSize = PetWindowConfig.defaultSize
+        let originBefore = PetWindowConfig.bottomRightOrigin(visibleFrame: externalVisibleFrame, windowSize: windowSize)
+
+        let fallbackVisibleFrame = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let originAfter = PetWindowConfig.bottomRightOrigin(visibleFrame: fallbackVisibleFrame, windowSize: windowSize)
+
+        XCTAssertNotEqual(originBefore, originAfter)
+
+        let frameAfter = CGRect(origin: originAfter, size: windowSize)
+        XCTAssertTrue(fallbackVisibleFrame.contains(frameAfter))
+    }
+
+    func testReanchorsWithinNonZeroOriginScreenAfterChange() {
+        // 主螢幕消失、退回一個 origin 非 (0,0) 的可用螢幕（`10` §7 fallback）。
+        let visibleFrame = CGRect(x: 200, y: 100, width: 1280, height: 800)
+        let windowSize = PetWindowConfig.defaultSize
+        let frame = PetWindowConfig.bottomRightFrame(visibleFrame: visibleFrame, windowSize: windowSize)
+
+        XCTAssertTrue(visibleFrame.contains(frame))
+        XCTAssertGreaterThanOrEqual(frame.minX, visibleFrame.minX)
+        XCTAssertGreaterThanOrEqual(frame.minY, visibleFrame.minY)
+    }
+
     #if canImport(AppKit)
     func testWindowFlagsMatchArchitectureSpec() {
         XCTAssertEqual(PetWindowConfig.Flags.styleMask, [.borderless])

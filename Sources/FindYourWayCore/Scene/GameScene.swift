@@ -28,6 +28,10 @@ public final class GameScene: SKScene {
     /// 每次 tick 推進後呼叫，供 executable 層節流存檔（`08` §3.6 存檔時機）。
     public var onStateChanged: ((GameState) -> Void)?
 
+    /// reduce-motion 消費檢查點（`10` §4.3 / §9.2 步驟 7）：`false` 時應關閉晝夜 tint 漸變與粒子。
+    /// Phase 5 尚無晝夜/粒子渲染（Phase 4 功能），此旗標先接好、供 Phase 4 上線時消費。
+    public var motionEnabled: Bool = true
+
     /// - Parameters:
     ///   - initialState: 啟動時（已完成離線結算的）狀態。
     ///   - initialOutcome: 啟動時的離線結算結果；若 `distanceGained > 0` 會播放回歸呈現（`08` §3.8）。

@@ -42,6 +42,17 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 5 啟動（使用者選擇先出貨）
+
+使用者看完 Phase 4/5 細節後選 **Phase 5 先出貨**（無美術新變數、可立即動工，裝起來日常用幾天再帶手感做 Phase 4）。
+委派 Opus 草擬 `10_PHASE5_SPEC.md`（自啟/選單列/偏好設定/打包簽章）。Phase 4 暫緩。
+- **使用者拍板簽章＝ad-hoc 自用不公證**（ADR-008 更新）。
+- Fable review 通過 `10` 規格、§10 待決全定案（ad-hoc/佔位icon/狀態卡三行/純AppKit/不記位置/不放音量）。
+- **R1（ad-hoc × SMAppService 自啟）最高驗證**；fallback：自啟卡關→系統設定手動加登入項，不阻擋其餘交付。
+- 委派 Sonnet 實作 Phase 5（偏好資料層 TDD/狀態卡片/偏好視窗 SwiftUI/LoginItemService/螢幕重錨定/打包 SIGN_MODE=adhoc）。施工中。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 3 完成（review + 真機驗證 + 提交 963f3f1）
 
 **兩修正完成並驗證**：schemaVersion 戳版本（save 時 currentVersion）+ 章節轉場 toast（chaptersCrossed 純函式，離線=線上迴歸鎖）。106/106 綠。

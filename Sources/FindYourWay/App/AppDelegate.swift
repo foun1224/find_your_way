@@ -12,9 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindow: PetWindow?
     private var gameScene: GameScene?
     private var statusItemController: StatusItemController?
+    private var preferencesWindowController: PreferencesWindowController?
 
     private let timeProvider: TimeProvider = SystemTimeProvider()
     private let saveStore = SaveStore(paths: SavePaths())
+    private let preferencesStore = PreferencesStore()
 
     private var idleCheckTimer: Timer?
     private var lastSaveTime: Double = 0
@@ -60,12 +62,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let statusItem = StatusItemController(
             onToggleVisibility: { [weak self] in self?.toggleVisibility() },
+            onOpenPreferences: { [weak self] in self?.openPreferences() },
             onQuit: { NSApp.terminate(nil) }
         )
+        statusItem.gameStateProvider = { [weak self] in
+            self?.gameScene?.gameState ?? GameState()
+        }
         statusItem.install()
         statusItemController = statusItem
 
+        applyMotionPreference()
         setUpPowerObservers()
+        setUpScreenParameterObserver()
+        setUpMotionPreferenceObservers()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -147,5 +156,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             window.showWithoutActivating()
         }
+    }
+
+    private func openPreferences() {
+        let controller = preferencesWindowController ?? PreferencesWindowController()
+        preferencesWindowController = controller
+        controller.show()
+    }
+
+    // MARK: - 多螢幕穩定（`10` §7）：螢幕參數變更（接拔/解析度）時重新錨定到有效螢幕右下角。
+
+    private func setUpScreenParameterObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleScreenParametersChanged() {
+        guard let window = petWindow else { return }
+        // 主螢幕消失時 fallback 到第一個可用螢幕，避免落到不存在的螢幕外（`10` §7）。
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let frame = PetWindowConfig.bottomRightFrame(visibleFrame: visibleFrame, windowSize: PetWindowConfig.defaultSize)
+        window.setFrame(frame, display: true)
+    }
+
+    // MARK: - Reduce motion 消費點（`10` §4.3）：套用 effective 旗標到 render 層檢查點。
+
+    private func setUpMotionPreferenceObservers() {
+        // 使用者在偏好視窗切換、或在系統設定改「降低動態」，兩者都應即時反映（`10` §4.2）。
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applyMotionPreference),
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applyMotionPreference),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applyMotionPreference() {
+        let systemPref = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let userOverride = preferencesStore.load().reduceMotionOverride
+        let reduceMotion = MotionSettings.effectiveReduceMotion(userOverride: userOverride, systemPref: systemPref)
+        gameScene?.motionEnabled = !reduceMotion
     }
 }

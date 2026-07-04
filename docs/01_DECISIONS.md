@@ -88,6 +88,7 @@
 - **狀態**：Accepted (2026-07-03) — Fable 鎖定
 - **Decision**：**Phase 1–4 以 Developer ID + Notarization 為目標**（保留視窗/全域事件自由度）；是否上架 App Store 待 **Phase 5** 依實測沙盒限制再定。
 - **Rationale**：點角色互動（策略 B）可能需全域滑鼠監聽，與 App Sandbox 有潛在衝突（`04` §7.5 / R3）；先不被沙盒綁死，出貨型態延後決策。
+- **更新 (2026-07-04，使用者拍板)**：Phase 5 定位為**只自己用** → 走 **ad-hoc 本地簽章（`codesign -s -`）、不公證**（免費、無需 Apple Developer 帳號；首次開啟可能需右鍵「打開」一次）。Developer ID + Notarize 延後到「要分發給他人」時才做。App Store 仍延後（ADR-008 原則不變）。
 
 ## ADR-009：呈現方式＝角色固定左側、世界捲動
 
