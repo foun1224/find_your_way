@@ -23,16 +23,16 @@ final class EncounterDeckTests: XCTestCase {
 
     func testSameSlotAndSeasonAlwaysProducesSameCard() {
         for slot in [0, 1, 2, 5, 42, 1000] {
-            let a = EncounterDeck.card(atSlot: slot, season: .summer)
-            let b = EncounterDeck.card(atSlot: slot, season: .summer)
-            XCTAssertEqual(a, b, "同一 (slot, season) 應永遠選到同一張卡（確定性）")
+            let a = EncounterDeck.card(atSlot: slot, season: .summer, companionMet: true)
+            let b = EncounterDeck.card(atSlot: slot, season: .summer, companionMet: true)
+            XCTAssertEqual(a, b, "同一 (slot, season, companionMet) 應永遠選到同一張卡（確定性）")
         }
     }
 
     func testDoesNotDependOnWallClock() {
         // 選卡是純函式，簽章裡完全沒有「現在時間」的輸入——多次呼叫（模擬不同真實時間）
         // 對同一 (slot, season) 結果不變，證明未偷偷讀取牆鐘。
-        let results = (0..<5).map { _ in EncounterDeck.card(atSlot: 7, season: .autumn) }
+        let results = (0..<5).map { _ in EncounterDeck.card(atSlot: 7, season: .autumn, companionMet: true) }
         XCTAssertTrue(results.allSatisfy { $0 == results[0] })
     }
 
@@ -68,7 +68,7 @@ final class EncounterDeckTests: XCTestCase {
         // 掃過連續一段卡槽，任兩個相鄰卡槽不應選到同一張卡 id。
         var previousId: String?
         for slot in 0..<200 {
-            guard let card = EncounterDeck.card(atSlot: slot, season: .spring) else {
+            guard let card = EncounterDeck.card(atSlot: slot, season: .spring, companionMet: true) else {
                 XCTFail("春季過濾清單不應為空")
                 continue
             }
@@ -94,5 +94,36 @@ final class EncounterDeckTests: XCTestCase {
         XCTAssertEqual(EncounterDeck.slotIndex(atDistance: spacing - 1), 0)
         XCTAssertEqual(EncounterDeck.slotIndex(atDistance: spacing), 1)
         XCTAssertEqual(EncounterDeck.slotIndex(atDistance: spacing * 10), 10)
+    }
+
+    // MARK: - 相遇前不出 companion 卡（一致性守則）
+
+    func testCompanionCardsNeverSelectedBeforeCompanionMet() {
+        // 掃過大量卡槽 x 全季節，companionMet == false 時選出的卡永遠不是 .companion 類，
+        // 避免旅伴相遇（`Companion.meetDistance`）之前憑空冒出不存在的旅伴。
+        for season in Season.allCases {
+            for slot in 0..<200 {
+                guard let card = EncounterDeck.card(atSlot: slot, season: season, companionMet: false) else {
+                    XCTFail("\(season) 過濾清單不應為空")
+                    continue
+                }
+                XCTAssertNotEqual(card.category, .companion,
+                                   "companionMet == false 時不應選到 companion 類卡（slot \(slot), \(season)）")
+            }
+        }
+    }
+
+    func testCompanionCardsCanAppearAfterCompanionMetAndRemainDeterministic() {
+        // 相遇後 companion 類卡可以出現；同輸入仍應永遠選到同一張卡（確定性不因新參數而破壞）。
+        var sawCompanionCard = false
+        for slot in 0..<200 {
+            let a = EncounterDeck.card(atSlot: slot, season: .summer, companionMet: true)
+            let b = EncounterDeck.card(atSlot: slot, season: .summer, companionMet: true)
+            XCTAssertEqual(a, b, "同一 (slot, season, companionMet: true) 應永遠選到同一張卡")
+            if a?.category == .companion {
+                sawCompanionCard = true
+            }
+        }
+        XCTAssertTrue(sawCompanionCard, "companionMet == true 時應有機會選到 companion 類卡")
     }
 }

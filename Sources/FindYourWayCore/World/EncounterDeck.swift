@@ -23,18 +23,18 @@ public enum EncounterDeck {
         EncounterCard(id: "distant_bell", category: .culture, logText: "遠處傳來一下鐘聲，很輕，像誰在報時，又像沒有。"),
         EncounterCard(id: "resting_traveler", category: .culture, logText: "一個人靠在樹下打盹，你放輕了腳步。"),
         EncounterCard(id: "wind_direction", category: .scenery, logText: "風換了個方向。你也跟著側了側身。"),
-        EncounterCard(id: "companion_hums", category: .companion, logText: "他哼了一小段調子，你沒聽過，但很好聽。"),
+        EncounterCard(id: "companion_hums", category: .companion, logText: "身邊有人哼起一小段調子，你沒聽過，但很好聽。"),
         EncounterCard(id: "share_water", category: .companion, logText: "你們分了同一壺水。剩下的路好像短了一點。"),
         EncounterCard(id: "old_milestone", category: .scenery, logText: "路邊一塊舊里程碑，字被磨平了，方向還在。"),
         EncounterCard(id: "kind_dog", category: .fauna, logText: "一隻狗跟了你們一小段，到牠家門口就停下了。"),
 
         // `17_ENCOUNTER_CARDS.md` §1（Fable curated · Accepted 2026-07-04）：通用卡 18 張。
         EncounterCard(id: "walk_shoulder_rest", category: .companion, logText: "走累了，你們肩並肩坐了一會兒，誰都沒開口。"),
-        EncounterCard(id: "pebble_handed", category: .companion, logText: "他撿到一顆圓圓的石子，遞給你，你收進了口袋。"),
-        EncounterCard(id: "wait_for_laces", category: .companion, logText: "你停下來繫鞋帶，他也停下，等你。"),
+        EncounterCard(id: "pebble_handed", category: .companion, logText: "同行的人撿到一顆圓圓的石子，遞給你，你收進了口袋。"),
+        EncounterCard(id: "wait_for_laces", category: .companion, logText: "你停下來繫鞋帶，身邊的人也停下，等你。"),
         EncounterCard(id: "last_ration_shared", category: .companion, logText: "分著吃最後一塊乾糧，誰也沒提剩得少。"),
         EncounterCard(id: "same_step_rhythm", category: .companion, logText: "你們並排走著，腳步不知不覺踩成了同一個節奏。"),
-        EncounterCard(id: "tugged_sleeve", category: .companion, logText: "他先看見了什麼，沒說話，只是拉了拉你的袖子。"),
+        EncounterCard(id: "tugged_sleeve", category: .companion, logText: "身邊的人先看見了什麼，沒說話，只是拉了拉你的袖子。"),
         EncounterCard(id: "bare_feet_airing", category: .companion, logText: "歇腳時，你們把靴子脫了，晾晾走了一天的腳。"),
         EncounterCard(id: "side_path", category: .scenery, logText: "一條小路從大路岔開，通向不知道哪裡，你們看了它一眼。"),
         EncounterCard(id: "puddles_after_rain", category: .scenery, logText: "雨後路上幾個小水窪，各自映著一小塊天。"),
@@ -65,7 +65,7 @@ public enum EncounterDeck {
         EncounterCard(id: "snowmelt_field", category: .scenery, seasons: [.spring], logText: "融雪的田裡積了水，映著剛回暖的天。"),
         EncounterCard(id: "willow_buds", category: .scenery, seasons: [.spring], logText: "柳條垂到水面，剛抽出嫩黃的芽。"),
         EncounterCard(id: "sowing_seeds", category: .culture, seasons: [.spring], logText: "村口有人在翻土播種，彎著腰，不慌不忙。"),
-        EncounterCard(id: "flower_tucked_on_pack", category: .companion, seasons: [.spring], logText: "他摘了朵路邊的花，別在你的包上，什麼也沒說。")
+        EncounterCard(id: "flower_tucked_on_pack", category: .companion, seasons: [.spring], logText: "同行的人摘了朵路邊的花，別在你的包上，什麼也沒說。")
     ]
 
     /// 夏 Summer。
@@ -102,7 +102,7 @@ public enum EncounterDeck {
         EncounterCard(id: "ripe_persimmons", category: .scenery, seasons: [.autumn], logText: "柿子紅透了掛在枝上，葉子快落光了。"),
         EncounterCard(id: "orange_dusk_clouds", category: .scenery, seasons: [.autumn], logText: "起風的傍晚，天邊的雲被染成了橘紅。"),
         EncounterCard(id: "corn_under_eaves", category: .culture, seasons: [.autumn], logText: "有人把玉米一串串地掛上了屋簷。"),
-        EncounterCard(id: "leaf_kept", category: .companion, seasons: [.autumn], logText: "他撿起一片好看的葉子，夾進了行囊裡。")
+        EncounterCard(id: "leaf_kept", category: .companion, seasons: [.autumn], logText: "身邊的人撿起一片好看的葉子，夾進了行囊裡。")
     ]
 
     /// 冬 Winter：安靜乾淨的白，不做蕭瑟/死亡壓力（`16` §1.2）。
@@ -120,7 +120,7 @@ public enum EncounterDeck {
         EncounterCard(id: "cat_in_winter_sun", category: .fauna, seasons: [.winter], logText: "一隻貓縮在誰家的窗台上，曬那一點冬天的太陽。"),
         EncounterCard(id: "steaming_buns", category: .food, seasons: [.winter], logText: "路過的攤子蒸著白胖的包子，熱氣糊了半條街。"),
         EncounterCard(id: "new_red_paper", category: .culture, seasons: [.winter], logText: "家家門上換了新的紅紙，路過都覺得暖。"),
-        EncounterCard(id: "scarf_pulled_up", category: .companion, seasons: [.winter], logText: "你們哈著白氣走，他把圍巾往上拉了拉。")
+        EncounterCard(id: "scarf_pulled_up", category: .companion, seasons: [.winter], logText: "你們哈著白氣走，身邊的人把圍巾往上拉了拉。")
     ]
 
     /// 完整卡組（24 張起手 + `17_ENCOUNTER_CARDS.md` 52 張 = 76 張）。擴充＝加卡即可，系統不改（`16` §3 末）。
@@ -131,15 +131,27 @@ public enum EncounterDeck {
         all.filter { $0.isAvailable(in: season) }
     }
 
-    /// 確定性選卡（`16` §2.2）：先依季節過濾，再用 `hash(worldSeed, slotIndex) % filtered.count` 選一張。
+    /// 依季節 + 「旅伴是否已相遇」過濾出可出現的卡：相遇前 `.companion` 類卡整批排除，
+    /// 避免旅伴相遇（`Companion.meetDistance`）之前憑空冒出不存在的旅伴（一致性守則）。
+    public static func availableCards(for season: Season, companionMet: Bool) -> [EncounterCard] {
+        let bySeason = availableCards(for: season)
+        guard !companionMet else { return bySeason }
+        return bySeason.filter { $0.category != .companion }
+    }
+
+    /// 確定性選卡（`16` §2.2）：先依季節（及相遇前排除 `.companion` 類）過濾，
+    /// 再用 `hash(worldSeed, slotIndex) % filtered.count` 選一張。
     /// 若與「上一槽同 id」緊鄰重複則取次順位（環狀嘗試整個過濾後清單，避免死鎖）。
     /// **不依賴牆鐘**：同輸入永遠同輸出。空過濾清單時回傳 `nil`（防呆）。
-    public static func card(atSlot slotIndex: Int, season: Season) -> EncounterCard? {
-        let filtered = availableCards(for: season)
+    ///
+    /// - Parameter companionMet: 對應 `GameState.companionJoined`。`false` 時可選池排除
+    ///   `.companion` 類卡，確保旅伴相遇前不會選到「你們/身邊的人」這類卡。
+    public static func card(atSlot slotIndex: Int, season: Season, companionMet: Bool) -> EncounterCard? {
+        let filtered = availableCards(for: season, companionMet: companionMet)
         guard !filtered.isEmpty else { return nil }
         guard filtered.count > 1 else { return filtered[0] }
 
-        let previousCard = previousSlotCard(slotIndex: slotIndex, season: season, filtered: filtered)
+        let previousCard = previousSlotCard(slotIndex: slotIndex, season: season, companionMet: companionMet, filtered: filtered)
 
         let baseIndex = Int(mix(worldSeed: worldSeed, slotIndex: slotIndex) % UInt64(filtered.count))
         for offset in 0..<filtered.count {
@@ -153,11 +165,11 @@ public enum EncounterDeck {
         return filtered[baseIndex]
     }
 
-    /// 計算「上一槽」在同一季節過濾清單下選出的卡，供避免緊鄰重複比較。
-    /// 若上一槽落在不同季節（跨季交界），仍以「當下季節」的過濾清單重新選一次上一槽的結果——
-    /// 這是刻意簡化：緊鄰重複的防呆本意是避免視覺上「同一句話連續出現」，用同一份過濾清單
-    /// 重算上一槽索引即可達成，且維持確定性、無需額外狀態。
-    private static func previousSlotCard(slotIndex: Int, season: Season, filtered: [EncounterCard]) -> EncounterCard? {
+    /// 計算「上一槽」在同一份過濾清單下選出的卡，供避免緊鄰重複比較。
+    /// 若上一槽落在不同季節（跨季交界），仍以「當下季節 + 當下 companionMet」的過濾清單
+    /// 重新選一次上一槽的結果——這是刻意簡化：緊鄰重複的防呆本意是避免視覺上「同一句話
+    /// 連續出現」，用同一份過濾清單重算上一槽索引即可達成，且維持確定性、無需額外狀態。
+    private static func previousSlotCard(slotIndex: Int, season: Season, companionMet: Bool, filtered: [EncounterCard]) -> EncounterCard? {
         guard slotIndex > 0, filtered.count > 1 else { return nil }
         let previousIndex = Int(mix(worldSeed: worldSeed, slotIndex: slotIndex - 1) % UInt64(filtered.count))
         return filtered[previousIndex]

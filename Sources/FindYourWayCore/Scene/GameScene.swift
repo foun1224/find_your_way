@@ -498,7 +498,7 @@ public final class GameScene: SKScene {
         // 相遇卡（Stage A，`16` §2.3）：疊加的無盡氛圍層，與上面的 story beats 並存、不搶戲。
         // `motionEnabled == false` 時不冒卡（`16` §4「受 motionEnabled 控制」）。
         if motionEnabled {
-            for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance) {
+            for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance, companionMet: gameState.companionJoined) {
                 scheduleJourneyLog(text: card.logText, after: toastDelay)
                 toastDelay += 3.0
             }
@@ -508,14 +508,18 @@ public final class GameScene: SKScene {
     /// 沿里程軸掃出 `(fromDistance, toDistance]` 之間跨越的相遇卡卡槽，依序回傳選中的卡
     /// （純函式委派 `EncounterDeck`，本方法只負責把「卡槽的季節」換算成呼叫參數）。
     /// 相遇卡**不入 `GameState`、不持久化**（`16` §2.2 紅線）：這裡只是每次即時算，不記憶。
-    private static func encounterCards(crossedFrom fromDistance: Double, to toDistance: Double) -> [EncounterCard] {
+    /// - Parameter companionMet: 對應結算後的 `GameState.companionJoined`。相遇前一律排除
+    ///   `.companion` 類卡（見 `EncounterDeck.card(atSlot:season:companionMet:)`）；離線回歸區間
+    ///   若跨越相遇點，採「結算後 companionJoined」為準的最低限度規則：相遇後回來可含 companion
+    ///   卡，相遇前不含（不逐槽細分區間前後段）。
+    private static func encounterCards(crossedFrom fromDistance: Double, to toDistance: Double, companionMet: Bool) -> [EncounterCard] {
         let oldSlot = EncounterDeck.slotIndex(atDistance: fromDistance)
         let newSlot = EncounterDeck.slotIndex(atDistance: toDistance)
         guard newSlot > oldSlot else { return [] }
         return (max(oldSlot + 1, 0)...newSlot).compactMap { slot in
             let slotDistance = Double(slot) * EncounterDeck.cardSpacing
             let season = Season.at(distance: slotDistance)
-            return EncounterDeck.card(atSlot: slot, season: season)
+            return EncounterDeck.card(atSlot: slot, season: season, companionMet: companionMet)
         }
     }
 
@@ -639,7 +643,7 @@ public final class GameScene: SKScene {
         // 離線回歸的相遇卡摘要（`16` §2.3）：挑最後 1–2 張以「路過了…」呈現，不逐一列出、
         // 不做錯過清單（守低喚醒/零功利）。`motionEnabled == false` 時不呈現。
         if motionEnabled {
-            let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance)
+            let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance, companionMet: gameState.companionJoined)
             for card in crossed.suffix(2) {
                 scheduleJourneyLog(text: "你不在時，路過了…\(card.logText)", after: delay)
                 delay += 3.0
