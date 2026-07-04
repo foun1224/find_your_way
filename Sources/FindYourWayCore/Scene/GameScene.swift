@@ -40,6 +40,21 @@ public final class GameScene: SKScene {
     private static let warmResponseCooldown: TimeInterval = 0.6
     private var lastWarmResponseTime: TimeInterval = -1000
 
+    // MARK: - 主角自主微行為：偶爾看你（`13_PSYCH_AUDIT.md` P1 / `02` §2, §6）
+
+    private static let heroRestScheduleKey = "heroRestSchedule"
+
+    /// 主角是否正在「偶爾看你」休息中：休息期間**只凍結世界視覺捲動（`displayedDistance`）**，
+    /// 絕不能凍結 `GameState.distance` 的推進（不變式，見 `performTick`）。
+    private var isCharacterResting = false
+
+    // MARK: - 靠近 / 游標回應性（`13_PSYCH_AUDIT.md` P2 / `02` §4，ADR-006 嚴格零功利）
+
+    /// 上一輪 `notifyCursorNear`/`notifyCursorFar` 評估時，游標是否在感應圈內（供
+    /// `ProximityAwareness.shouldAcknowledge` 做邊緣觸發判斷）。由 `ClickThroughController` 驅動。
+    private var wasCursorNear = false
+    private var lastProximityAcknowledgeTime: Double = -.infinity
+
     private let rules: SimulationRules
     private let timeProvider: TimeProvider
 
@@ -108,6 +123,7 @@ public final class GameScene: SKScene {
         buildPropNodes()
         buildAtmosphereOverlays()
         applyWorldScroll(distance: displayedDistance)
+        scheduleNextHeroRest()
 
         // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
         if gameState.companionJoined {
@@ -365,6 +381,9 @@ public final class GameScene: SKScene {
     public func resumeWithCatchUp() {
         let (newState, outcome) = OfflineProgress.settle(gameState, now: timeProvider.now, rules: rules)
         gameState = newState
+        // 若恰好在「偶爾看你」休息期間閒置/睡眠，恢復時直接解除凍結、跳過補間直接對齊
+        // （長時間睡眠後的補間不具意義），避免卡在「永遠不會結束的休息」。
+        isCharacterResting = false
         displayedDistance = gameState.distance
         applyWorldScroll(distance: displayedDistance)
 
@@ -391,8 +410,13 @@ public final class GameScene: SKScene {
         var updated = newState
         updated.lastActiveTimestamp = timeProvider.now
         gameState = updated
-        displayedDistance = gameState.distance
-        applyWorldScroll(distance: displayedDistance)
+        // 不變式（`13_PSYCH_AUDIT.md` P1 紅線）：`GameState.distance` 的推進（上面幾行）
+        // 永遠照常運作，不受「主角正在看你」影響；**只有畫面呈現用的 `displayedDistance`**
+        // 在休息期間暫停更新，讓世界看起來靜止。休息結束時由 `endHeroRest` 平滑追趕回來。
+        if !isCharacterResting {
+            displayedDistance = gameState.distance
+            applyWorldScroll(distance: displayedDistance)
+        }
         onStateChanged?(gameState)
 
         // 章節轉場（`09` §4.1）：跨越章節門檻時在旅程日誌顯示一行（非互動）。
@@ -411,6 +435,61 @@ public final class GameScene: SKScene {
             scheduleJourneyLog(text: chapterTransitionText(chapter), after: toastDelay)
             toastDelay += 3.0
         }
+    }
+
+    // MARK: - 主角自主微行為：偶爾看你排程（`13_PSYCH_AUDIT.md` P1）
+
+    /// 排程下一次「偶爾看你」：等待秒數由 `HeroRestSchedule`（純函式）依均勻亂數換算，
+    /// 平均每 40–70 秒一次、帶隨機變化，避免固定節奏顯得機械。
+    private func scheduleNextHeroRest() {
+        let interval = HeroRestSchedule.nextIntervalSeconds(unit: Double.random(in: 0..<1))
+        let wait = SKAction.wait(forDuration: interval)
+        let trigger = SKAction.run { [weak self] in self?.performHeroRest() }
+        run(SKAction.sequence([wait, trigger]), withKey: Self.heroRestScheduleKey)
+    }
+
+    /// 觸發一次「偶爾看你」：凍結世界視覺捲動（`isCharacterResting`）、讓角色轉為面向觀看者
+    /// 停留一段隨機時間，結束後恢復走路並排程下一次。
+    private func performHeroRest() {
+        guard let character else {
+            scheduleNextHeroRest()
+            return
+        }
+        isCharacterResting = true
+        let duration = HeroRestSchedule.restDurationSeconds(unit: Double.random(in: 0..<1))
+        character.playRestLookAtViewer(
+            duration: duration,
+            transitionDuration: HeroRestSchedule.transitionDurationSeconds
+        ) { [weak self] in
+            self?.endHeroRest()
+        }
+    }
+
+    /// 「看你」結束：解除凍結、把 `displayedDistance` 平滑追趕回真實的 `gameState.distance`
+    /// （休息期間 `gameState.distance` 一直照常推進，只是沒有反映到畫面上），再排程下一次。
+    private func endHeroRest() {
+        isCharacterResting = false
+        catchUpDisplayedDistance()
+        scheduleNextHeroRest()
+    }
+
+    /// 平滑（ease-in-out，`HeroRestSchedule.catchUpDurationSeconds` ≈ 0.4–0.6s）把
+    /// `displayedDistance` 追趕到 `gameState.distance`，不瞬間跳過去（`02` §6 無 jolt）。
+    /// 休息時間短、頻率低，追趕量本身很小，補間幾乎不會被察覺為「加速」。
+    private func catchUpDisplayedDistance() {
+        let start = displayedDistance
+        let target = gameState.distance
+        guard target != start else { return }
+
+        let duration = HeroRestSchedule.catchUpDurationSeconds
+        let catchUp = SKAction.customAction(withDuration: duration) { [weak self] _, elapsed in
+            guard let self else { return }
+            let progress = duration > 0 ? min(1.0, Double(elapsed) / duration) : 1.0
+            self.displayedDistance = start + (target - start) * progress
+            self.applyWorldScroll(distance: self.displayedDistance)
+        }
+        catchUp.timingMode = .easeInEaseOut
+        run(catchUp)
     }
 
     /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置。
@@ -613,5 +692,40 @@ public final class GameScene: SKScene {
         guard now - lastWarmResponseTime >= Self.warmResponseCooldown else { return }
         lastWarmResponseTime = now
         character?.playWarmResponse()
+    }
+
+    // MARK: - 靠近 / 游標回應性（`13_PSYCH_AUDIT.md` P2 / `02` §4 依附回應性，ADR-006 嚴格零功利）
+
+    /// 判定某點是否落在「靠近感應圈」內（比點擊命中框大一圈，`ProximityAwareness.radiusPadding`）。
+    /// 純幾何委派給 `ProximityAwareness`（可測），供 `ClickThroughController` 追蹤游標時呼叫。
+    public func isPointNearCharacter(_ point: CGPoint) -> Bool {
+        guard let character else { return false }
+        return ProximityAwareness.isNear(
+            point: point,
+            characterScreenX: Double(character.position.x),
+            characterScreenY: Double(character.position.y),
+            characterSize: character.size,
+            sceneSize: size
+        )
+    }
+
+    /// 由 `ClickThroughController` 在每次游標移動評估後呼叫，回報「這一刻游標是否在感應圈內」。
+    /// 是否真的觸發一次「察覺你來了」反應，交給純函式 `ProximityAwareness.shouldAcknowledge`
+    /// 判斷（邊緣觸發 + 節流冷卻）；本方法只負責串接 runtime 狀態（`wasCursorNear`/上次觸發時間）。
+    ///
+    /// **嚴格零功利（ADR-006）**：這條路徑完全不碰 `GameState`/存檔/任何進度數值，
+    /// 純視覺表達（`CharacterNode.playProximityAcknowledgement`）。
+    public func notifyCursorNearState(_ isNear: Bool) {
+        let now = timeProvider.now
+        if ProximityAwareness.shouldAcknowledge(
+            wasNear: wasCursorNear,
+            isNear: isNear,
+            now: now,
+            lastAcknowledgeTime: lastProximityAcknowledgeTime
+        ) {
+            lastProximityAcknowledgeTime = now
+            character?.playProximityAcknowledgement()
+        }
+        wasCursorNear = isNear
     }
 }

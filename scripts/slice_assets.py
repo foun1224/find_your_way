@@ -356,6 +356,13 @@ class Region:
 HERO_RIGHT_ROW = Region(x=95, y=42, w=390, h=90)
 HERO_RIGHT_FRAME_COUNT = 5
 
+# 主角「向前」列（第 3 排，面向觀看者）：與「向右」同一 x 範圍、同寬 5 格，
+# 列距目視校準約 92px/排（向右 y=42 → 向左 y≈134 → 向前 y≈226 → 向後 y≈318）；
+# 已用 `--inspect` 之外的獨立裁切校驗（見 scratchpad 交叉檢查），y=226,h=90 完整框住
+# 頭頂到鞋底、左右不切邊。此列供「偶爾看向使用者」微行為使用（`13_PSYCH_AUDIT.md` P1/P2）。
+HERO_FRONT_ROW = Region(x=95, y=226, w=390, h=90)
+HERO_FRONT_FRAME_COUNT = 5
+
 # 旅伴（藍衫紅披風）「向右」列：與主角同一 y 帶（同一排「向右」），x 落在主角區塊之後、
 # 道具區塊之前；4 格（旅伴只有 4 走路 frame，主角 5 格）。目視校準見 Phase 4b 校準紀錄。
 COMPANION_RIGHT_ROW = Region(x=650, y=42, w=320, h=90)
@@ -418,6 +425,10 @@ def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
 
 def slice_hero_right(sheet: Image) -> list:
     return slice_walk_row(sheet, HERO_RIGHT_ROW, HERO_RIGHT_FRAME_COUNT)
+
+
+def slice_hero_front(sheet: Image) -> list:
+    return slice_walk_row(sheet, HERO_FRONT_ROW, HERO_FRONT_FRAME_COUNT)
 
 
 def slice_companion_right(sheet: Image) -> list:
@@ -501,6 +512,14 @@ def main() -> None:
     char_dir = os.path.join(OUT_ROOT, "char_hero")
     for i, frame in enumerate(frames):
         out_path = os.path.join(char_dir, f"right_{i}.png")
+        encode_png(frame, out_path)
+        print(f"wrote {out_path} ({frame.width}x{frame.height})")
+
+    # --- 主角向前（面向觀看者）frame：供「偶爾看向使用者」微行為使用 ---
+    front_frames = slice_hero_front(sheet)
+    front_frames = pad_to_common_size(front_frames)
+    for i, frame in enumerate(front_frames):
+        out_path = os.path.join(char_dir, f"front_{i}.png")
         encode_png(frame, out_path)
         print(f"wrote {out_path} ({frame.width}x{frame.height})")
 

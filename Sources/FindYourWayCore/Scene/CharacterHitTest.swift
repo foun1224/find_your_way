@@ -22,12 +22,16 @@ public enum CharacterHitTest {
     ///   - characterScreenY: 角色錨點 y（腳邊，`anchorPoint.y = 0`）。
     ///   - characterSize: 角色目前顯示尺寸（寬高，點）。
     ///   - sceneSize: 場景/視窗尺寸，用於排除場景外的點（例如轉換座標時的浮點誤差落到邊界外）。
+    ///   - padding: 命中框四周外擴的容差（點）。預設為 `hitPadding`（點擊命中用）；
+    ///     `ProximityAwareness`（P2 靠近感應，`13_PSYCH_AUDIT.md`）會傳入更大的值，
+    ///     重用同一份幾何判斷做「比點擊更寬鬆的靠近圈」，而非另開一套判定邏輯。
     public static func isPointOnCharacter(
         point: CGPoint,
         characterScreenX: Double,
         characterScreenY: Double,
         characterSize: CGSize,
-        sceneSize: CGSize
+        sceneSize: CGSize,
+        padding: Double = hitPadding
     ) -> Bool {
         guard
             point.x >= 0, point.x <= Double(sceneSize.width),
@@ -36,11 +40,11 @@ public enum CharacterHitTest {
             return false
         }
 
-        let halfWidth = Double(characterSize.width) / 2.0 + hitPadding
+        let halfWidth = Double(characterSize.width) / 2.0 + padding
         let minX = characterScreenX - halfWidth
         let maxX = characterScreenX + halfWidth
-        let minY = characterScreenY - hitPadding
-        let maxY = characterScreenY + Double(characterSize.height) + hitPadding
+        let minY = characterScreenY - padding
+        let maxY = characterScreenY + Double(characterSize.height) + padding
 
         return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
     }

@@ -70,6 +70,11 @@ final class ClickThroughController {
         let pointInWindow = window.convertPoint(fromScreen: screenPoint)
         let hit = scene.isPointOnCharacter(pointInWindow)
         setHovering(hit)
+
+        // 靠近感應（`13_PSYCH_AUDIT.md` P2）：比點擊命中框大一圈的溫和覺察，與「吃點擊」的
+        // 命中判斷（上面）各自獨立評估——游標可以「靠近但還沒進命中框」就先被角色察覺到。
+        let near = scene.isPointNearCharacter(pointInWindow)
+        scene.notifyCursorNearState(near)
     }
 
     private func setHovering(_ hit: Bool) {
