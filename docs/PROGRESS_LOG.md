@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 4a/4b/4c（像素美術 + 晝夜天氣）
+
+使用者用 ChatGPT 產出像素素材表（`design/assets/asset_sheet.png`：兩角色4向走路+道具+分層背景，側面橫向捲軸）。分期整合，每期 Fable 親自 build+截圖驗收（Sonnet 施工、Fable 抓 bug 修）：
+- **4a（710f5e5）**：slice_assets.py 純標準庫切圖 + ArtCatalog + 背景三層 panorama + 主角走路。Fable 抓「背景全黑」＝panorama 誤用 wrappedX scatter → 修為 panoramaTileXs 無縫平鋪 + 迴歸測試。
+- **4b（72ce94d）**：旅伴 sprite 同行（構圖主從）+ 15 道具 + 地面 scatter + 地標 signpost。
+- **4c（d4fbfeb）**：晝夜光影(DayNightCycle)+天氣(Weather 晴/陰/雨+雨絲)+reduce-motion 控制+QA env。Fable 抓兩 bug：overlay color alpha 相乘變透明→改不透明 color；設計 alpha 太低→真機校準調強。夜藍/黃金暖/雨皆正確。
+- 測試 151/151 綠。**已知小瑕疵**：遠/中景 panorama 交界一條淡水平接縫（各為獨立小場景），留 polish。
+- **下一步：4d 點角色微互動（Phase 4 最後一項）** → 之後 Phase 4 完成，全專案僅剩 polish。QA env：`FYW_DEBUG_SECONDS_INTO_DAY` / `FYW_DEBUG_WEATHER`。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 2 實作交付 + Fable review
 
 **Sonnet 交付 Phase 2**：Simulation（TimeProvider/GameState/SimulationRules/SimulationEngine/OfflineProgress）+ Persistence（SaveStore/SavePaths/SaveSchema/Migrations）+ Scene（WorldScroll/改 WalkMotion 語意為里程/固定左側 CharacterNode/GameScene 消費 GameState + 離線回歸呈現）+ 選單列結束 + isPaused 省電。`swift test` **55/55 綠**（Phase 1 舊 19 不回歸 + 新 36）。離線結算端到端驗證（改時間戳 5h→distance≈18000、過地標）。
