@@ -108,6 +108,94 @@ final class WorldScrollTests: XCTestCase {
         XCTAssertEqual(x, 42, accuracy: 0.0001)
     }
 
+    // MARK: - Panorama 無縫水平平鋪（Phase 4a 背景全黑 bug 迴歸鎖）
+    //
+    // 根因：panorama 曾誤用 `wrappedX`（各槽位獨立 mod span），distance 一增加，
+    // 兩張 tile 就一起被繞到可視範圍外 → 整片透空變黑。`panoramaTileXs` 改以
+    // tile 寬度為平鋪單位；下面驗證任何 distance 下 tile 聯集都完整覆蓋 `[0, sceneWidth]`。
+
+    /// 給定 tile 左緣陣列與寬度，回傳是否完整覆蓋 `[0, sceneWidth]`（用細緻取樣點檢查每點都落在某張 tile 內）。
+    private func coversFullRange(_ xs: [Double], tileWidth: Double, sceneWidth: Double) -> Bool {
+        let sampleStep = 1.0
+        var sample = 0.0
+        while sample <= sceneWidth {
+            let covered = xs.contains { x in sample >= x && sample < x + tileWidth }
+            if !covered { return false }
+            sample += sampleStep
+        }
+        return true
+    }
+
+    func testPanoramaTileXsCoversFullSceneWidthAtVariousDistances() {
+        let sceneWidth = 320.0
+        let tileWidth = 784.0
+        let layerFactor = 1.0
+
+        // 涵蓋：0、tile 邊界附近、多個 tile 之後的大 distance、負向（理論上不會發生但要防呆）。
+        let distances: [Double] = [
+            0, 1, 100, 392,
+            tileWidth - 0.001, tileWidth, tileWidth + 1,
+            2 * tileWidth, 10_000, 1_000_000,
+            -1, -tileWidth, -12345,
+        ]
+
+        for distance in distances {
+            let xs = WorldScroll.panoramaTileXs(
+                sceneWidth: sceneWidth, tileWidth: tileWidth, distance: distance, layerFactor: layerFactor
+            )
+            XCTAssertTrue(
+                coversFullRange(xs, tileWidth: tileWidth, sceneWidth: sceneWidth),
+                "distance=\(distance) 時 tiles=\(xs) 未完整覆蓋 [0, \(sceneWidth)]（會露空變黑）"
+            )
+        }
+    }
+
+    func testPanoramaTileXsCoversFullRangeAcrossContinuousSweep() {
+        // 連續掃過多個週期，確保「任意極小 shift」都不會露空（原 bug 的實際觸發情境：每個 2 秒 tick 位移一點點）。
+        let sceneWidth = 320.0
+        let tileWidth = 784.0
+        for distance in stride(from: 0.0, through: 3 * tileWidth, by: 5.0) {
+            let xs = WorldScroll.panoramaTileXs(
+                sceneWidth: sceneWidth, tileWidth: tileWidth, distance: distance, layerFactor: 0.45
+            )
+            XCTAssertTrue(
+                coversFullRange(xs, tileWidth: tileWidth, sceneWidth: sceneWidth),
+                "distance=\(distance) 時未完整覆蓋"
+            )
+        }
+    }
+
+    func testPanoramaTileXsDifferentLayerFactorsAllCoverFullRange() {
+        let sceneWidth = 320.0
+        let tileWidth = 784.0
+        for layerFactor in [0.15, 0.45, 1.0] {
+            for distance in stride(from: 0.0, through: 2_000.0, by: 73.0) {
+                let xs = WorldScroll.panoramaTileXs(
+                    sceneWidth: sceneWidth, tileWidth: tileWidth, distance: distance, layerFactor: layerFactor
+                )
+                XCTAssertTrue(
+                    coversFullRange(xs, tileWidth: tileWidth, sceneWidth: sceneWidth),
+                    "layerFactor=\(layerFactor) distance=\(distance) 未完整覆蓋"
+                )
+            }
+        }
+    }
+
+    func testPanoramaTileXsTilesAreContiguousWithoutGapOrOverlapDrift() {
+        // 排序後相鄰 tile 間距應恰為 tileWidth（無縫接合，也不重疊到破壞平鋪規律）。
+        let tileWidth = 784.0
+        let xs = WorldScroll.panoramaTileXs(sceneWidth: 320, tileWidth: tileWidth, distance: 12345, layerFactor: 0.7)
+        let sorted = xs.sorted()
+        for i in 1..<sorted.count {
+            XCTAssertEqual(sorted[i] - sorted[i - 1], tileWidth, accuracy: 0.0001)
+        }
+    }
+
+    func testPanoramaTileXsZeroOrNegativeTileWidthReturnsEmpty() {
+        XCTAssertEqual(WorldScroll.panoramaTileXs(sceneWidth: 320, tileWidth: 0, distance: 10, layerFactor: 1.0), [])
+        XCTAssertEqual(WorldScroll.panoramaTileXs(sceneWidth: 320, tileWidth: -5, distance: 10, layerFactor: 1.0), [])
+    }
+
     func testCharacterScreenXWithinExpectedLeftBand() {
         let sceneWidth = 320.0
         let x = WorldScroll.characterScreenX(sceneWidth: sceneWidth)

@@ -63,6 +63,15 @@ fi
 
 cp "${ICON_PATH}" "${RESOURCES_DIR}/${ICON_FILE}"
 
+# ---- 像素美術（Phase 4a，`12` §1/§2；由 scripts/slice_assets.py 重生，非版控）----
+ART_DIR="${ROOT_DIR}/Resources/art"
+if [ -d "${ART_DIR}" ]; then
+    echo "==> copying art (${ART_DIR}) into bundle"
+    cp -R "${ART_DIR}" "${RESOURCES_DIR}/art"
+else
+    echo "==> warning: ${ART_DIR} not found — run 'python3 scripts/slice_assets.py' first (app will fall back to placeholder art)" >&2
+fi
+
 cat > "${CONTENTS_DIR}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

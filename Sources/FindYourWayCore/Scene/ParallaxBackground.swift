@@ -1,46 +1,108 @@
 import SpriteKit
 
-/// Phase 2 背景（`08` §4b 視覺補正）：
-/// - **天空/草地＝固定滿版填充**：不做橫向視差捲動（對純色填充無意義且會造成錯位/露空），
-///   永遠覆蓋整個視窗。晝夜色調留 Phase 4。
-/// - **可捲動、可循環的佔位景物層**：讓「前進」看得見、有視差層次。
-///   近景（草叢/石頭，快）+ 遠景（丘陵剪影，慢），依 `distance` 向左捲動、移出後 wrap 回收。
-///   這些純裝飾、**不入 `GameState`、不記錄**（同 Phase 3 §2.2 B 類精神）。真正美術留 Phase 4。
+/// Phase 4a 背景分層（`12_PHASE4_SPEC.md` §1/§2，取代 Phase 2 純色佔位）：
+/// 用 `scripts/slice_assets.py` 切出的三條 panorama（`Resources/art/bg/{far,mid,ground}.png`）
+/// 由遠到近堆疊，依 `WorldScroll.panoramaTileXs` 各自 `layerFactor` 做無縫水平平鋪填滿視窗寬。
+/// 遠景最慢、地面最快，呈現視差深度；`filteringMode = .nearest` 保留像素邊緣。
+///
+/// 注意：這裡刻意**不**沿用 `WorldScroll.wrappedX`——`wrappedX` 是為 Phase 2「散落小草叢」
+/// 這類獨立小物件的循環出現設計的（各槽位各自 `mod span`），拿來鋪一整條連續 panorama
+/// 會在 `distance` 增加後讓所有 tile 一起被繞到可視範圍外、露出整片透空（Phase 4a 背景全黑
+/// 的根因）。`panoramaTileXs` 改以「tile 寬度」為平鋪單位，任何 `distance` 下都保證
+/// `[0, sceneWidth]` 被連續覆蓋，無縫接合。
+///
+/// 找不到美術檔案（例如尚未執行切圖腳本）時優雅降級回 Phase 2 純色滿版，不 crash。
 public enum ParallaxBackground {
 
-    /// 可捲動景物層：一組節點共用 `layerFactor` 與循環週期 `span`；
-    /// 每個節點的 `baseX` 是它在單一週期內的槽位，實際螢幕 x 由 `WorldScroll.wrappedX` 算出。
+    /// 可捲動景物層：一組節點依左緣連續平鋪（anchor 左下），共用 `layerFactor` 與單張顯示寬 `tileWidth`；
+    /// 實際螢幕 x 由 `WorldScroll.panoramaTileXs` 算出（見 `GameScene.applyWorldScroll`）。
     public struct SceneryLayer {
-        public let nodes: [(node: SKSpriteNode, baseX: Double)]
+        public let nodes: [SKSpriteNode]
         public let layerFactor: Double
-        public let span: Double
+        public let tileWidth: Double
     }
 
-    /// 角色腳邊高度（草地帶內的比例），近景景物與路面條帶都座落於此，作為速度參照。
-    private static let trailYRatio = 0.16
+    /// 地面平台的顯示高度（點）：作為整組背景的「主尺度」，遠景/中景依同一縮放比例換算，
+    /// 保證三層像素密度一致（避免遠景/中景/地面「像素大小」不成比例）。
+    /// `CharacterNode` 站立的基準線（`GameScene` 用本值算角色腳邊 y）。
+    public static let groundDisplayHeight: CGFloat = 40
 
-    /// 天空/草地固定填充後，回傳可捲動景物層供 `GameScene` 依 `distance` 更新位置。
+    /// 中景/遠景相鄰層之間的重疊量（點）：讓「較近的層」（zPosition 較高）蓋住「較遠的層」
+    /// 圖塊本身自帶的小片天空，避免明顯的接縫（各條 panorama 是各自獨立小場景，非無縫延伸）。
+    private static let groundMidOverlap: CGFloat = 10
+    private static let midFarOverlap: CGFloat = 15
+
     @discardableResult
     public static func build(in parent: SKNode, size: CGSize) -> [SceneryLayer] {
-        buildStaticSkyAndMeadow(in: parent, size: size)
+        guard
+            let groundTexture = ArtCatalog.texture(relativePath: "bg/ground.png"),
+            let midTexture = ArtCatalog.texture(relativePath: "bg/mid.png"),
+            let farTexture = ArtCatalog.texture(relativePath: "bg/far.png")
+        else {
+            return buildFallbackFlatColors(in: parent, size: size)
+        }
 
-        let width = Double(size.width)
-        let horizonY = Double(size.height) / 2.0
-        let trailY = horizonY * trailYRatio
+        let scale = groundDisplayHeight / groundTexture.size().height
+        let groundHeight = groundTexture.size().height * scale
+        let midHeight = midTexture.size().height * scale
 
-        // 貼地山徑條帶（固定滿版，赭色，作為角色腳下的「路」；路面上的紋理由近景景物捲動呈現）。
-        buildTrailStrip(in: parent, sceneWidth: width, trailY: trailY)
+        let groundBottomY = 0.0
+        let midBottomY = Double(groundHeight - groundMidOverlap)
+        let farBottomY = midBottomY + Double(midHeight - midFarOverlap)
 
-        let far = buildFarHills(in: parent, sceneWidth: width, horizonY: horizonY)
-        let near = buildNearScenery(in: parent, sceneWidth: width, trailY: trailY)
+        // zPosition：遠景最後（最負）、地面最前（最靠近角色），近層蓋住遠層的接縫。
+        let ground = buildLayer(
+            in: parent, sceneWidth: Double(size.width), texture: groundTexture,
+            scale: scale, bottomY: groundBottomY, zPosition: -10, layerFactor: 1.0
+        )
+        let mid = buildLayer(
+            in: parent, sceneWidth: Double(size.width), texture: midTexture,
+            scale: scale, bottomY: midBottomY, zPosition: -20, layerFactor: 0.45
+        )
+        let far = buildLayer(
+            in: parent, sceneWidth: Double(size.width), texture: farTexture,
+            scale: scale, bottomY: farBottomY, zPosition: -30, layerFactor: 0.15
+        )
 
-        // 遠景在前、近景在後（zPosition 亦對應），近景蓋在遠景之上。
-        return [far, near]
+        // 回傳順序不影響繪製（zPosition 決定疊放），僅供 `GameScene` 逐層套用捲動。
+        return [far, mid, ground]
     }
 
-    // MARK: - 固定滿版天空/草地
+    private static func buildLayer(
+        in parent: SKNode,
+        sceneWidth: Double,
+        texture: SKTexture,
+        scale: CGFloat,
+        bottomY: Double,
+        zPosition: CGFloat,
+        layerFactor: Double
+    ) -> SceneryLayer {
+        let width = Double(texture.size().width * scale)
+        let height = texture.size().height * scale
 
-    private static func buildStaticSkyAndMeadow(in parent: SKNode, size: CGSize) {
+        // 張數與初始位置只是起始佈局；實際張數/x 座標每次 `applyWorldScroll` 都會依
+        // `WorldScroll.panoramaTileXs` 重新計算，這裡先鋪出同樣數量的節點供之後重用/搬移。
+        let initialXs = WorldScroll.panoramaTileXs(
+            sceneWidth: sceneWidth, tileWidth: width, distance: 0, layerFactor: layerFactor
+        )
+
+        var nodes: [SKSpriteNode] = []
+        for x in initialXs {
+            let node = SKSpriteNode(texture: texture)
+            node.size = CGSize(width: width, height: height)
+            node.texture?.filteringMode = .nearest
+            node.anchorPoint = CGPoint(x: 0, y: 0)
+            node.position = CGPoint(x: CGFloat(x), y: CGFloat(bottomY))
+            node.zPosition = zPosition
+            parent.addChild(node)
+            nodes.append(node)
+        }
+        return SceneryLayer(nodes: nodes, layerFactor: layerFactor, tileWidth: width)
+    }
+
+    // MARK: - 找不到美術時的優雅降級（Phase 2 純色滿版）
+
+    private static func buildFallbackFlatColors(in parent: SKNode, size: CGSize) -> [SceneryLayer] {
         let halfHeight = size.height / 2.0
         let centerX = size.width / 2.0
 
@@ -56,62 +118,6 @@ public enum ParallaxBackground {
 
         parent.addChild(sky)
         parent.addChild(meadow)
-    }
-
-    // MARK: - 貼地山徑條帶（固定，赭色路面）
-
-    private static func buildTrailStrip(in parent: SKNode, sceneWidth: Double, trailY: Double) {
-        let strip = SKSpriteNode(color: Palette.trailOchre.skColor, size: CGSize(width: sceneWidth, height: 22))
-        strip.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-        strip.position = CGPoint(x: sceneWidth / 2.0, y: trailY)
-        strip.zPosition = -18 // 在草地(-30)之上、近景景物(-15)之下
-        parent.addChild(strip)
-    }
-
-    // MARK: - 遠景丘陵剪影（慢，layerFactor ≈ 0.3）
-
-    private static func buildFarHills(in parent: SKNode, sceneWidth: Double, horizonY: Double) -> SceneryLayer {
-        let spacing = 160.0
-        let span = ceilToSpacing(sceneWidth + spacing, spacing: spacing)
-        let count = Int(span / spacing)
-
-        var nodes: [(node: SKSpriteNode, baseX: Double)] = []
-        for i in 0..<count {
-            let hill = SKSpriteNode(color: Palette.meadowGreen.skColor, size: CGSize(width: 120, height: 60))
-            hill.alpha = 0.5 // 剪影感：較淡、退到後面
-            hill.anchorPoint = CGPoint(x: 0.5, y: 0)
-            hill.zPosition = -20
-            hill.position.y = horizonY - 8 // 座落地平線稍下，露出丘頂
-            parent.addChild(hill)
-            nodes.append((hill, Double(i) * spacing))
-        }
-        return SceneryLayer(nodes: nodes, layerFactor: 0.3, span: span)
-    }
-
-    // MARK: - 近景草叢/石頭（快，layerFactor ≈ 1.0）
-
-    /// 近景是負責呈現「快速前進感」的層：用 **Pine Shadow 松影綠**（深綠，同系但夠對比），
-    /// 在草地綠 `#7FB069` 上明顯可見（`08` §4b 修正——舊版與草地同色故看不見）。
-    /// 座落於角色腳邊高度（`trailY`）、貼在赭色路面上一起橫向快速掠過 → 清楚的速度參照。
-    /// z-order：`-15`，在草地填充(-30)與路面(-18)之上、角色(10)之下。
-    private static func buildNearScenery(in parent: SKNode, sceneWidth: Double, trailY: Double) -> SceneryLayer {
-        let spacing = 80.0
-        let span = ceilToSpacing(sceneWidth + spacing, spacing: spacing)
-        let count = Int(span / spacing)
-
-        var nodes: [(node: SKSpriteNode, baseX: Double)] = []
-        for i in 0..<count {
-            let bush = SKSpriteNode(color: Palette.pineShadow.skColor, size: CGSize(width: 14, height: 14))
-            bush.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            bush.zPosition = -15
-            bush.position.y = trailY + 2 // 落在路面上、角色腳邊
-            parent.addChild(bush)
-            nodes.append((bush, Double(i) * spacing))
-        }
-        return SceneryLayer(nodes: nodes, layerFactor: 1.0, span: span)
-    }
-
-    private static func ceilToSpacing(_ value: Double, spacing: Double) -> Double {
-        (value / spacing).rounded(.up) * spacing
+        return []
     }
 }

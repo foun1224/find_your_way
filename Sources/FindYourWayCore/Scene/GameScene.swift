@@ -71,8 +71,10 @@ public final class GameScene: SKScene {
         sceneryLayers = ParallaxBackground.build(in: self, size: size)
 
         // ADR-009：角色固定於畫面左側、原地走路，不再左右 roam。
+        // screenY 對齊地面平台頂線（`ParallaxBackground.groundDisplayHeight`），
+        // 讓角色（anchorPoint 腳邊）看起來站在地面上，而非懸空/陷入。
         let screenX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
-        let screenY = Double(size.height) * 0.25
+        let screenY = Double(ParallaxBackground.groundDisplayHeight)
         let node = CharacterNode(screenX: screenX, screenY: screenY)
         node.zPosition = 10
         addChild(node)
@@ -174,14 +176,16 @@ public final class GameScene: SKScene {
     /// 天空/草地為固定滿版填充，不在此捲動（`08` §4b）。
     private func applyWorldScroll(distance: Double) {
         for layer in sceneryLayers {
-            for entry in layer.nodes {
-                let x = WorldScroll.wrappedX(
-                    baseX: entry.baseX,
-                    distance: distance,
-                    layerFactor: layer.layerFactor,
-                    span: layer.span
-                )
-                entry.node.position.x = CGFloat(x)
+            // Panorama 是一整條連續背景，用 `panoramaTileXs` 無縫平鋪（不可用 `wrappedX`：
+            // `wrappedX` 各槽位獨立 `mod span`，會讓整片 tile 一起繞出可視範圍，背景全黑）。
+            let xs = WorldScroll.panoramaTileXs(
+                sceneWidth: Double(size.width),
+                tileWidth: layer.tileWidth,
+                distance: distance,
+                layerFactor: layer.layerFactor
+            )
+            for (node, x) in zip(layer.nodes, xs) {
+                node.position.x = CGFloat(x)
             }
         }
 

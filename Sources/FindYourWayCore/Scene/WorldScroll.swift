@@ -35,6 +35,32 @@ public enum WorldScroll {
         return m < 0 ? m + span : m
     }
 
+    /// Panorama 無縫水平平鋪（`08` §4b / Phase 4a 修正）：與 `wrappedX`（供未來近景散落道具 scatter 用）不同，
+    /// panorama 是一整條連續背景，必須保證任意 `distance` 下 `[0, sceneWidth]` 都被完整覆蓋、無縫。
+    ///
+    /// 作法：把 `distance * layerFactor` 對 `tileWidth` 取模得到 `[0, tileWidth)` 的偏移 `offset`，
+    /// 再鋪出足夠多張、左緣落在 `i * tileWidth - offset`（`i = 0..<count`）的 tile。
+    /// 因為 `offset < tileWidth`，第 0 張的左緣落在 `(-tileWidth, 0]`，只要張數涵蓋到
+    /// `sceneWidth + tileWidth`，聯集必然覆蓋整個可視範圍，且相鄰 tile 緊鄰（無縫）。
+    /// - Returns: 各 tile 左緣（anchor 在左下）的 x 座標，由左到右排列。
+    public static func panoramaTileXs(
+        sceneWidth: Double,
+        tileWidth: Double,
+        distance: Double,
+        layerFactor: Double
+    ) -> [Double] {
+        guard tileWidth > 0 else { return [] }
+
+        let shift = distance * layerFactor
+        let rawOffset = shift.truncatingRemainder(dividingBy: tileWidth)
+        let offset = rawOffset < 0 ? rawOffset + tileWidth : rawOffset
+
+        // +2：一張補左邊（offset 造成第 0 張左移）、一張補右邊（無條件進位的餘量），
+        // 確保 [0, sceneWidth] 兩端都仍有 tile 覆蓋。
+        let count = Int((sceneWidth / tileWidth).rounded(.up)) + 2
+        return (0..<count).map { Double($0) * tileWidth - offset }
+    }
+
     /// 地標在畫面上的 x 座標：以角色錨點 `characterAnchorX` 為基準，
     /// 隨 `currentDistance` 逼近而向左移入 → 抵達時對齊角色 → 通過後繼續往左移出畫面。
     public static func landmarkScreenX(
