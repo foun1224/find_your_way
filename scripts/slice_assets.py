@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET_SHEET = os.path.join(REPO_ROOT, "design", "assets", "asset_sheet.png")
+KINGDOM_SHEET = os.path.join(REPO_ROOT, "design", "kingdom.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -406,6 +407,45 @@ BG_GROUND = Region(x=95, y=915, w=1431, h=73)
 BG_MID_TOP_FADE_PX = 22
 
 
+# ---------------------------------------------------------------------------
+# 王國首都座標設定表（`18_STAGE_B_SPEC.md` §1，由 Read design/kingdom.png 目視 +
+# 逐像素亮度掃描校準，1536x1024，與 asset_sheet.png 同尺寸但是獨立素材表）。
+# ---------------------------------------------------------------------------
+
+# 內容區左右邊界：與 asset_sheet.png 同款留白版式，逐像素掃描找到左右內容邊界
+# （x=96 起、x=1510 止，兩側外面是畫布留白的近黑色）。
+# 背景四層 y 範圍：以逐像素亮度掃描找分區間的斷點（見校準時的 inspect 紀錄）：
+#   遠景（城堡群+山+雲）：       y=57..187（斷點 188/189 轉近黑）
+#   中景（藍頂塔樓密城）：       y=192..313（斷點 314/315 轉近黑）
+#   前景（旗幟石牆+燈柱+樹+門）：y=321..443（斷點 444 轉近黑）
+#   地面平台（灰石板）：         y=464..542（斷點 543 轉近黑）
+KINGDOM_BG_FAR = Region(x=96, y=57, w=1415, h=131)
+KINGDOM_BG_MID = Region(x=96, y=192, w=1415, h=122)
+KINGDOM_BG_FORE = Region(x=96, y=321, w=1415, h=123)
+KINGDOM_BG_GROUND = Region(x=96, y=464, w=1415, h=79)
+
+# mid 疊在 far 之前、fore 疊在 mid 之前，皆有小段上緣重疊（`ParallaxBackground` 對應 overlap 常數），
+# 各自獨立 panorama，淡出上緣讓接縫變成漸層過渡（同 `BG_MID_TOP_FADE_PX` 手法）。
+KINGDOM_BG_MID_TOP_FADE_PX = 18
+KINGDOM_BG_FORE_TOP_FADE_PX = 14
+
+# 道具／互動物件：素材表右下角區塊。逐一目視校準座標（見校準時的連通元件偵測輔助），
+# 範圍刻意留餘裕，去背 + autocrop 後收斂到道具本身的精確 bounding box。
+KINGDOM_PROP_REGIONS: dict = {
+    "banner": Region(x=995, y=618, w=150, h=168),
+    "market_stall": Region(x=1125, y=635, w=145, h=150),
+    "crate": Region(x=1282, y=642, w=68, h=70),
+    "lamppost": Region(x=1428, y=602, w=96, h=198),
+    "cart": Region(x=988, y=778, w=158, h=102),
+    "potted_flower": Region(x=1153, y=780, w=82, h=92),
+    "tree": Region(x=1322, y=768, w=118, h=228),
+    "signpost": Region(x=1248, y=798, w=102, h=112),
+    "fountain": Region(x=1008, y=870, w=142, h=128),
+    "statue": Region(x=1153, y=860, w=82, h=138),
+    "bench": Region(x=1233, y=913, w=132, h=82),
+}
+
+
 def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
     """依 `region` 裁出一整排走路 frame、去背，再依透明間隙切成 `frame_count` 格並各自 autocrop。
     共用邏輯，供主角/旅伴兩排走路動畫共用（`12` §1）。
@@ -467,6 +507,63 @@ def fade_top_edge(img: Image, fade_px: int) -> Image:
     return out
 
 
+# 王國道具在素材表上彼此間距較窄（`18` §1 校準時發現的風險）：`KINGDOM_PROP_REGIONS` 的裁切框
+# 為求完整框住每個道具，邊界會與鄰近道具的裁切框「矩形」略有重疊（但實際像素連通分量不重疊，
+# 校準時用連通元件偵測驗證過）。兩種去雜點策略視道具形狀選用：
+# - `keep_largest_component`（同角色走路 frame 手法）：只留裁切框內最大的連通塊。適合本體
+#   是單一連通塊、沒有細長分離部件的道具（樹/木箱）；細長部件（如燈柱的柱身、路標的柱腳、
+#   長椅的椅腳）常因去背/去雜點在細窄處斷開變成多個小連通塊，套這招會誤刪本體的一部分。
+# - `remove_small_components`（同既有 `slice_props` 手法，但門檻拉高到 80）：保留裁切框內
+#   所有「夠大」的連通塊（含細長分離部件），只清掉裁切框邊緣帶到的鄰居道具碎片（通常明顯小於
+#   80 像素）。適合本體有細長/分離部件的道具，也是大部分王國道具的預設策略。
+_KINGDOM_LARGEST_COMPONENT_PROPS = {"tree", "crate"}
+_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA = 80
+_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES: dict = {}
+
+# 少數道具（例如 signpost）裁切框右上角直接「貼著」鄰居的樹冠陰影——鄰居像素與本體
+# 的招牌板边缘實際相連（連通），連通元件過濾法對「貼在一起」的鄰居碎片無效（`slice_assets.py`
+# 既有 `despeckle_neutral_residue` 註解也點出同樣的限制）。這裡改用最直接的作法：
+# 裁切後（去背前）直接把已知的鄰居碎片矩形（裁切框內的區域座標）填成透明，
+# 校準時目視 + 網格疊圖找出的座標，僅對該道具生效、不影響其餘像素。
+_KINGDOM_PROP_EXCLUDE_RECTS: dict = {
+    "signpost": [Region(x=58, y=0, w=44, h=42)],
+    "tree": [
+        Region(x=0, y=0, w=118, h=12),   # 最上緣一整條：燈柱橫臂碎片（樹冠尚未開始，y<12 全清安全）
+        Region(x=0, y=12, w=65, h=85),   # 左上：燈柱剪影貼在樹冠左側的碎片（樹冠這段只長在 x>=65）
+        Region(x=0, y=140, w=50, h=90),  # 左下：長椅椅背貼在樹幹旁的碎片（樹幹這段只長在 x>=65）
+    ],
+}
+
+
+def _apply_exclude_rects(img: Image, rects: list) -> Image:
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    for rect in rects:
+        for y in range(max(0, rect.y), min(img.height, rect.y + rect.h)):
+            for x in range(max(0, rect.x), min(img.width, rect.x + rect.w)):
+                out.pixels[y][x] = (0, 0, 0, 0)
+    return out
+
+
+def slice_kingdom_props(sheet: Image) -> dict:
+    """王國道具切圖：與 `slice_props` 同一套去背流程，座標表換成 `KINGDOM_PROP_REGIONS`
+    （`18` §1）；去雜點/去鄰居碎片策略見 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明。"""
+    out = {}
+    for name, region in KINGDOM_PROP_REGIONS.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        if name in _KINGDOM_PROP_EXCLUDE_RECTS:
+            cropped = _apply_exclude_rects(cropped, _KINGDOM_PROP_EXCLUDE_RECTS[name])
+        keyed = chroma_key_flood(cropped, threshold=28)
+        if name in _KINGDOM_LARGEST_COMPONENT_PROPS:
+            keyed = keep_largest_component(keyed)
+        else:
+            min_area = _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES.get(name, _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA)
+            keyed = remove_small_components(keyed, min_area=min_area)
+        out[name] = autocrop(keyed)
+    return out
+
+
 def pad_to_common_size(frames: list) -> list:
     """把一組 frame pad 成相同尺寸（以最大寬高為準、水平置中、底部對齊）避免走路動畫抖動。"""
     if not frames:
@@ -496,15 +593,20 @@ def main() -> None:
     os.makedirs(OUT_ROOT, exist_ok=True)
 
     # --- 背景三條 panorama（不透明，crop 即可） ---
+    # 同步寫兩份：`bg/`（既有路徑，向後相容——地標 signpost 等非地域限定資源仍讀這裡）
+    # + `regions/meadow/bg/`（`18_STAGE_B_SPEC.md` §1「既有草原素材同步地域化」，供 Region
+    # 系統依地域挑背景）。草原沒有前景層（`fore`），地域切換時該地域直接略過 fore。
     bg_dir = os.path.join(OUT_ROOT, "bg")
+    meadow_bg_dir = os.path.join(OUT_ROOT, "regions", "meadow", "bg")
     for name, region in (("far", BG_FAR), ("mid", BG_MID), ("ground", BG_GROUND)):
         img = sheet.crop(region.x, region.y, region.w, region.h)
         if name == "mid":
             # mid 疊在 far 之前、上緣與 far 重疊，淡出上緣讓接縫變成漸層（見 `fade_top_edge`）。
             img = fade_top_edge(img, fade_px=BG_MID_TOP_FADE_PX)
-        out_path = os.path.join(bg_dir, f"{name}.png")
-        encode_png(img, out_path)
-        print(f"wrote {out_path} ({img.width}x{img.height})")
+        for out_dir in (bg_dir, meadow_bg_dir):
+            out_path = os.path.join(out_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
 
     # --- 主角向右走路 frame ---
     frames = slice_hero_right(sheet)
@@ -533,12 +635,46 @@ def main() -> None:
         print(f"wrote {out_path} ({frame.width}x{frame.height})")
 
     # --- 道具／互動物件（Phase 4b）---
+    # 同步寫 `props/`（既有路徑，地標 signpost 等非地域限定用途）+ `regions/meadow/props/`
+    # （地域化，`18` §1，供 `PropScatter` 依地域挑草原道具池）。
     props = slice_props(sheet)
     props_dir = os.path.join(OUT_ROOT, "props")
+    meadow_props_dir = os.path.join(OUT_ROOT, "regions", "meadow", "props")
     for name, img in props.items():
-        out_path = os.path.join(props_dir, f"{name}.png")
-        encode_png(img, out_path)
-        print(f"wrote {out_path} ({img.width}x{img.height})")
+        for out_dir in (props_dir, meadow_props_dir):
+            out_path = os.path.join(out_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+    # --- 王國首都地域（`18_STAGE_B_SPEC.md` §1）：獨立素材表 design/kingdom.png ---
+    if os.path.exists(KINGDOM_SHEET):
+        kingdom_sheet = decode_png(KINGDOM_SHEET)
+        print(f"kingdom_sheet: {kingdom_sheet.width}x{kingdom_sheet.height}")
+
+        kingdom_bg_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "bg")
+        kingdom_layers = (
+            ("far", KINGDOM_BG_FAR, None),
+            ("mid", KINGDOM_BG_MID, KINGDOM_BG_MID_TOP_FADE_PX),
+            ("fore", KINGDOM_BG_FORE, KINGDOM_BG_FORE_TOP_FADE_PX),
+            ("ground", KINGDOM_BG_GROUND, None),
+        )
+        for name, region, fade_px in kingdom_layers:
+            img = kingdom_sheet.crop(region.x, region.y, region.w, region.h)
+            if fade_px:
+                # mid/fore 疊在後方層之前、上緣重疊，淡出讓接縫變漸層（同 `BG_MID_TOP_FADE_PX` 手法）。
+                img = fade_top_edge(img, fade_px=fade_px)
+            out_path = os.path.join(kingdom_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        kingdom_props = slice_kingdom_props(kingdom_sheet)
+        kingdom_props_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "props")
+        for name, img in kingdom_props.items():
+            out_path = os.path.join(kingdom_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {KINGDOM_SHEET} not found, skipping kingdom region slicing")
 
 
 def inspect(sheet: Image) -> None:

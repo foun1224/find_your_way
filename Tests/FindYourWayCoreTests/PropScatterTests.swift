@@ -55,4 +55,24 @@ final class PropScatterTests: XCTestCase {
             XCTAssertFalse(slot.propName.isEmpty)
         }
     }
+
+    // MARK: - 地域化道具池（`18_STAGE_B_SPEC.md` §1/§3）
+
+    func testKingdomSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.kingdomSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "王國槽位表應依 baseX 遞增排列")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.kingdomSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksMeadowOrKingdomPool() {
+        XCTAssertEqual(PropScatter.slots(for: .meadowOrigin), PropScatter.slots)
+        XCTAssertEqual(PropScatter.slots(for: .kingdom), PropScatter.kingdomSlots)
+    }
 }

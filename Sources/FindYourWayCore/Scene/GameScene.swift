@@ -13,10 +13,31 @@ public final class GameScene: SKScene {
 
     private var character: CharacterNode?
     private var companion: CompanionNode?
-    private var sceneryLayers: [ParallaxBackground.SceneryLayer] = []
     private var landmarkNodes: [String: SKNode] = [:]
-    /// 近景散落道具（Phase 4b `12` §2/§6）：純裝飾、不入 `GameState`，位置由 `PropScatter` 純函式決定。
-    private var propNodes: [(node: SKSpriteNode, slot: PropScatter.Slot)] = []
+
+    // MARK: - 地域背景/地面/道具 + Blend Zone crossfade（Stage B，`18_STAGE_B_SPEC.md` §3）
+
+    /// 目前顯示中的地域視覺集合（背景四層 + 該地域道具，見 `ParallaxBackground.RegionVisuals`）。
+    /// `nil` 代表美術資源缺失、已降級為 `buildFallbackFlatColors` 純色滿版（`usingFallbackBackground`）。
+    private var currentRegionVisuals: ParallaxBackground.RegionVisuals?
+    private var currentRegionType: RegionType?
+
+    /// Blend Zone 內才存在的「即將進入的下一地域」視覺集合；zone 外恆為 `nil`。
+    /// `container.zPosition` 固定設為 `Self.nextRegionZOffset`（略為靠後），`container.alpha`
+    /// 恆為 1（永遠不透明）；由 `currentRegionVisuals` 的 alpha 從 1 降到 0 蓋在它前面淡出，
+    /// 揭露出下一地域——這樣任一時刻疊起來的可視區域都是滿版不透明，不會露出視窗背後的桌面
+    /// （`03` §2.3 透明視窗）也不會有 jolt（`18` §3 無 jolt）。
+    private var nextRegionVisuals: ParallaxBackground.RegionVisuals?
+    private var nextRegionType: RegionType?
+
+    /// `nextRegionVisuals.container` 相對 `currentRegionVisuals.container`（zPosition 0）
+    /// 略靠後的偏移量：小到不會跨過各背景層本身的 zPosition 間距（≥5，見 `ParallaxBackground`），
+    /// 只用來確保「下一地域」永遠疊在「當前地域」後面。
+    private static let nextRegionZOffset: CGFloat = -0.5
+
+    /// `true` 代表找不到任何地域美術、已降級為 Phase 2 純色滿版；此時不跑地域切換/Blend Zone 邏輯
+    /// （純色背景本來就不分地域，維持 Phase 2 行為，不 crash）。
+    private var usingFallbackBackground = false
 
     // MARK: - 晝夜光影 + 天氣（Phase 4c，`12` §3/§4）：純裝飾 L6 氛圍層，不入 `GameState`。
 
@@ -113,7 +134,14 @@ public final class GameScene: SKScene {
     }
 
     private func buildScene() {
-        sceneryLayers = ParallaxBackground.build(in: self, size: size)
+        let initialRegion = Self.debugRegionOverride() ?? Region.at(distance: displayedDistance)
+        if let visuals = ParallaxBackground.buildRegion(initialRegion.assetFolder, in: self, size: size) {
+            currentRegionVisuals = visuals
+            currentRegionType = initialRegion
+        } else {
+            ParallaxBackground.buildFallbackFlatColors(in: self, size: size)
+            usingFallbackBackground = true
+        }
 
         // ADR-009：角色固定於畫面左側、原地走路，不再左右 roam。
         // screenY 對齊地面平台頂線（`ParallaxBackground.groundDisplayHeight`），
@@ -126,7 +154,6 @@ public final class GameScene: SKScene {
         character = node
 
         buildLandmarkNodes()
-        buildPropNodes()
         buildAtmosphereOverlays()
         applyWorldScroll(distance: displayedDistance)
         scheduleNextHeroRest()
@@ -134,6 +161,18 @@ public final class GameScene: SKScene {
         // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
         if gameState.companionJoined {
             addCompanionNodeIfNeeded(animateIn: false)
+        }
+    }
+
+    /// `FYW_DEBUG_REGION`（`meadow`/`kingdom`）：強制指定地域，方便 Fable 截圖王國畫面
+    /// 不必真的走 4h（`18_STAGE_B_SPEC.md` §4）。只影響「一開始顯示哪個地域」；不指定時
+    /// 照常依 `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
+    private static func debugRegionOverride() -> RegionType? {
+        guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_REGION"] else { return nil }
+        switch raw.lowercased() {
+        case "meadow": return .meadowOrigin
+        case "kingdom": return .kingdom
+        default: return nil
         }
     }
 
@@ -172,22 +211,6 @@ public final class GameScene: SKScene {
         }
     }
 
-    /// 近景散落道具（Phase 4b `12` §2/§6）：純裝飾，位置由 `PropScatter`（純函式，`08`/`12` 同一套
-    /// wrap 邏輯）決定，依 distance 捲動；找不到某道具美術時該槽位就不放（優雅降級，不 crash）。
-    private func buildPropNodes() {
-        let displayHeight: CGFloat = 34
-        for slot in PropScatter.slots {
-            guard let texture = ArtCatalog.texture(relativePath: "props/\(slot.propName).png") else { continue }
-            let aspect = texture.size().width / texture.size().height
-            let node = SKSpriteNode(texture: texture)
-            node.size = CGSize(width: displayHeight * aspect, height: displayHeight)
-            node.anchorPoint = CGPoint(x: 0.5, y: 0)
-            node.position.y = Double(ParallaxBackground.groundDisplayHeight)
-            node.zPosition = -1 // 地面之前、角色/旅伴之後（近景裝飾，`12` §2）。
-            addChild(node)
-            propNodes.append((node: node, slot: slot))
-        }
-    }
 
     /// L6 氛圍層（`03` §2.4）：晝夜 tint + 天氣 overlay，兩張覆蓋全畫面的 `SKSpriteNode`，
     /// zPosition 高於場景/角色（40 一族）、低於旅程日誌 toast（100），blend 為預設 `.alpha`
@@ -578,10 +601,32 @@ public final class GameScene: SKScene {
         run(catchUp)
     }
 
-    /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置。
+    /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置，並依
+    /// `Region.blend(atDistance:)` 驅動地域背景/道具的 Blend Zone crossfade（`18` §3）。
     /// 天空/草地為固定滿版填充，不在此捲動（`08` §4b）。
     private func applyWorldScroll(distance: Double) {
-        for layer in sceneryLayers {
+        updateRegionVisuals(distance: distance)
+
+        for visuals in [currentRegionVisuals, nextRegionVisuals] {
+            guard let visuals else { continue }
+            applyScroll(to: visuals, distance: distance)
+        }
+
+        let anchorX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
+        for landmark in Landmark.all {
+            guard let node = landmarkNodes[landmark.id] else { continue }
+            let x = WorldScroll.landmarkScreenX(
+                landmarkDistance: landmark.distance,
+                currentDistance: distance,
+                characterAnchorX: anchorX
+            )
+            node.position.x = CGFloat(x)
+        }
+    }
+
+    /// 把某一組地域視覺（背景四層 + 該地域道具）依 `distance` 捲動到位。
+    private func applyScroll(to visuals: ParallaxBackground.RegionVisuals, distance: Double) {
+        for layer in visuals.layers {
             // Panorama 是一整條連續背景，用 `panoramaTileXs` 無縫平鋪（不可用 `wrappedX`：
             // `wrappedX` 各槽位獨立 `mod span`，會讓整片 tile 一起繞出可視範圍，背景全黑）。
             let xs = WorldScroll.panoramaTileXs(
@@ -595,20 +640,83 @@ public final class GameScene: SKScene {
             }
         }
 
-        let anchorX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
-        for landmark in Landmark.all {
-            guard let node = landmarkNodes[landmark.id] else { continue }
-            let x = WorldScroll.landmarkScreenX(
-                landmarkDistance: landmark.distance,
-                currentDistance: distance,
-                characterAnchorX: anchorX
-            )
-            node.position.x = CGFloat(x)
-        }
-
-        for (node, slot) in propNodes {
+        for (node, slot) in visuals.propNodes {
             node.position.x = CGFloat(PropScatter.screenX(for: slot, distance: distance))
         }
+    }
+
+    /// 地域切換 + Blend Zone crossfade 的核心（`18` §3）：依 `Region.blend(atDistance:)`（純函式）
+    /// 決定「現在該顯示哪個地域、要不要疊下一個地域淡入」，並惰性建立/回收對應的
+    /// `ParallaxBackground.RegionVisuals`（找不到美術時维持現狀，不 crash）。
+    ///
+    /// crossfade 手法（見型別上方 `nextRegionVisuals` 的說明）：`nextRegionVisuals` 一旦建立就
+    /// 恆為不透明（`alpha = 1`）、疊在 `currentRegionVisuals` 後面（`Self.nextRegionZOffset`）；
+    /// 只讓 `currentRegionVisuals` 的 alpha 從 1 降到 0，蓋在前面淡出、露出後面的下一地域——
+    /// 任一時刻疊起來的可視畫面永遠是滿版不透明，沒有 jolt、也不會露出視窗背後的桌面。
+    private func updateRegionVisuals(distance: Double) {
+        guard !usingFallbackBackground else { return }
+
+        // `FYW_DEBUG_REGION`：強制固定顯示某地域，略過正常的 distance-based blend 計算，
+        // 方便 Fable 截圖（`18` §4）。存在期間完全不觸發 blend/切換。
+        if let forced = Self.debugRegionOverride() {
+            if currentRegionType != forced {
+                replaceCurrentRegion(with: forced)
+            }
+            discardNextRegionIfAny()
+            currentRegionVisuals?.container.alpha = 1
+            return
+        }
+
+        let blend = Region.blend(atDistance: distance)
+
+        guard blend.from != blend.to else {
+            // Blend Zone 外：只需要 `blend.from`（== 目前地域）存在，且是唯一顯示中的一組。
+            if currentRegionType != blend.from {
+                if nextRegionType == blend.from, let promoted = nextRegionVisuals {
+                    // 剛走出 Blend Zone：下一地域已經淡入完成，直接扶正為目前地域（無需重建）。
+                    currentRegionVisuals?.container.removeFromParent()
+                    promoted.container.zPosition = 0
+                    currentRegionVisuals = promoted
+                    currentRegionType = blend.from
+                    nextRegionVisuals = nil
+                    nextRegionType = nil
+                } else {
+                    replaceCurrentRegion(with: blend.from)
+                    discardNextRegionIfAny()
+                }
+            } else {
+                discardNextRegionIfAny()
+            }
+            currentRegionVisuals?.container.alpha = 1
+            return
+        }
+
+        // Blend Zone 內：確保 current == from、next == to，再依 t 套用 alpha。
+        if currentRegionType != blend.from {
+            replaceCurrentRegion(with: blend.from)
+        }
+        if nextRegionType != blend.to {
+            nextRegionVisuals?.container.removeFromParent()
+            nextRegionVisuals = ParallaxBackground.buildRegion(blend.to.assetFolder, in: self, size: size)
+            nextRegionVisuals?.container.zPosition = Self.nextRegionZOffset
+            nextRegionType = blend.to
+        }
+        currentRegionVisuals?.container.alpha = CGFloat(1 - blend.t)
+        nextRegionVisuals?.container.alpha = 1
+    }
+
+    private func replaceCurrentRegion(with region: RegionType) {
+        currentRegionVisuals?.container.removeFromParent()
+        currentRegionVisuals = ParallaxBackground.buildRegion(region.assetFolder, in: self, size: size)
+        currentRegionVisuals?.container.zPosition = 0
+        currentRegionType = region
+    }
+
+    private func discardNextRegionIfAny() {
+        guard nextRegionVisuals != nil else { return }
+        nextRegionVisuals?.container.removeFromParent()
+        nextRegionVisuals = nil
+        nextRegionType = nil
     }
 
     /// 離線回歸呈現（`08` §3.8 / §7 P6）：短捲動補間（≤2–3 秒）+ 一行溫柔旅程日誌。

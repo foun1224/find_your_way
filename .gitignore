@@ -10,3 +10,6 @@ Resources/AppIcon.icns
 # Phase 4 生成的美術產出（slice_assets.py / gen_sprite.py 重生）
 design/samples/*.png
 Resources/art/
+
+# emilkowalski design skills（npx skills add 安裝，可重裝）
+.agents/
