@@ -30,6 +30,12 @@ public final class GameScene: SKScene {
     /// 雨天粒子容器（緩慢雨絲，低密度）；`motionEnabled == false` 或非雨天時為 `nil`。
     private var rainLayer: SKNode?
 
+    // MARK: - 季節 + 相遇卡（Stage A，`16_STAGE_A_SPEC.md` §1/§2）：純裝飾氛圍層，不入 `GameState`。
+
+    /// 季節色調 overlay：依 `Season.tint(atDistance:)`（純函式）套色，每幀依 `displayedDistance` 更新
+    /// （連續函式，慢、無跳變，同晝夜 tint 範式）。`motionEnabled == false` 時維持中性（不套色）。
+    private var seasonOverlay: SKSpriteNode?
+
     private var lastUpdateTime: TimeInterval?
     private var timeSinceLastTick: Double = 0
     private var pendingOutcome: OfflineOutcome?
@@ -187,6 +193,17 @@ public final class GameScene: SKScene {
     /// zPosition 高於場景/角色（40 一族）、低於旅程日誌 toast（100），blend 為預設 `.alpha`
     /// （克制的半透明疊色，不用 `.multiply` 以免在夜間把暗部壓到看不清角色，`12` §7 風險）。
     private func buildAtmosphereOverlays() {
+        // 季節 tint：疊在晝夜/天氣之外的獨立一層（`16` §1.1/§4），zPosition 39（在晝夜 40 之下，
+        // 三條慢軸各自一層疊加：晝夜綁現實時間 × 季節綁里程 × 天氣，彼此不互相覆寫）。
+        let season = SKSpriteNode(color: .white, size: size)
+        season.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        season.position = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) / 2.0)
+        season.zPosition = 39
+        season.colorBlendFactor = 1.0
+        season.alpha = 0
+        addChild(season)
+        seasonOverlay = season
+
         let dayNight = SKSpriteNode(color: .white, size: size)
         dayNight.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         dayNight.position = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) / 2.0)
@@ -210,6 +227,8 @@ public final class GameScene: SKScene {
     public override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         let center = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) / 2.0)
+        seasonOverlay?.size = size
+        seasonOverlay?.position = center
         dayNightOverlay?.size = size
         dayNightOverlay?.position = center
         weatherOverlay?.size = size
@@ -219,6 +238,7 @@ public final class GameScene: SKScene {
     public override func update(_ currentTime: TimeInterval) {
         super.update(currentTime)
         updateAtmosphere()
+        updateSeasonOverlay()
         defer { lastUpdateTime = currentTime }
         guard let last = lastUpdateTime else { return }
         let dt = currentTime - last
@@ -266,6 +286,45 @@ public final class GameScene: SKScene {
         let weather = Self.debugWeatherOverride() ?? Weather.kind(forUnixSeconds: timeProvider.now)
         if weather != currentWeather {
             applyWeatherChange(weather)
+        }
+    }
+
+    /// 每幀套用季節 tint（`16` §1）：純函式 `Season.tint(atDistance:)` 依 `displayedDistance` 算色，
+    /// 連續、慢、無跳變。`motionEnabled == false`（reduce motion）時維持中性（不套色，`16` §1.2）。
+    ///
+    /// 支援環境變數強制指定季節，供 Fable 截圖驗收四季 tint：`FYW_DEBUG_SEASON`
+    /// （`spring`/`summer`/`autumn`/`winter`；指定時直接用該季純色，略過交界插值）。
+    private func updateSeasonOverlay() {
+        guard let seasonOverlay else { return }
+
+        guard motionEnabled else {
+            seasonOverlay.removeAllActions()
+            seasonOverlay.color = .white
+            seasonOverlay.alpha = 0
+            return
+        }
+
+        let tint: Palette.RGBA
+        if let forced = Self.debugSeasonOverride() {
+            tint = Season.tint(atDistance: Double(forced) * Season.seasonLength + Season.seasonLength * 0.1)
+        } else {
+            tint = Season.tint(atDistance: displayedDistance)
+        }
+        // 同晝夜 tint 的 alpha 教訓：color 用不透明版本，opacity 全交給 node.alpha。
+        seasonOverlay.color = tint.withAlpha(1.0).skColor
+        seasonOverlay.alpha = CGFloat(tint.alpha)
+    }
+
+    /// `FYW_DEBUG_SEASON` 回傳其在 `Season.cycle` 中的索引（0=spring…3=winter），供上面換算成一個
+    /// 落在該季節「中段」（遠離交界模糊帶）的 distance，呈現該季 authored 純色。
+    private static func debugSeasonOverride() -> Int? {
+        guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_SEASON"] else { return nil }
+        switch raw.lowercased() {
+        case "spring": return 0
+        case "summer": return 1
+        case "autumn": return 2
+        case "winter": return 3
+        default: return nil
         }
     }
 
@@ -435,6 +494,29 @@ public final class GameScene: SKScene {
             scheduleJourneyLog(text: chapterTransitionText(chapter), after: toastDelay)
             toastDelay += 3.0
         }
+
+        // 相遇卡（Stage A，`16` §2.3）：疊加的無盡氛圍層，與上面的 story beats 並存、不搶戲。
+        // `motionEnabled == false` 時不冒卡（`16` §4「受 motionEnabled 控制」）。
+        if motionEnabled {
+            for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance) {
+                scheduleJourneyLog(text: card.logText, after: toastDelay)
+                toastDelay += 3.0
+            }
+        }
+    }
+
+    /// 沿里程軸掃出 `(fromDistance, toDistance]` 之間跨越的相遇卡卡槽，依序回傳選中的卡
+    /// （純函式委派 `EncounterDeck`，本方法只負責把「卡槽的季節」換算成呼叫參數）。
+    /// 相遇卡**不入 `GameState`、不持久化**（`16` §2.2 紅線）：這裡只是每次即時算，不記憶。
+    private static func encounterCards(crossedFrom fromDistance: Double, to toDistance: Double) -> [EncounterCard] {
+        let oldSlot = EncounterDeck.slotIndex(atDistance: fromDistance)
+        let newSlot = EncounterDeck.slotIndex(atDistance: toDistance)
+        guard newSlot > oldSlot else { return [] }
+        return (max(oldSlot + 1, 0)...newSlot).compactMap { slot in
+            let slotDistance = Double(slot) * EncounterDeck.cardSpacing
+            let season = Season.at(distance: slotDistance)
+            return EncounterDeck.card(atSlot: slot, season: season)
+        }
     }
 
     // MARK: - 主角自主微行為：偶爾看你排程（`13_PSYCH_AUDIT.md` P1）
@@ -552,6 +634,16 @@ public final class GameScene: SKScene {
         for chapter in outcome.newChapters {
             scheduleJourneyLog(text: chapterTransitionText(chapter), after: delay)
             delay += 3.0
+        }
+
+        // 離線回歸的相遇卡摘要（`16` §2.3）：挑最後 1–2 張以「路過了…」呈現，不逐一列出、
+        // 不做錯過清單（守低喚醒/零功利）。`motionEnabled == false` 時不呈現。
+        if motionEnabled {
+            let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance)
+            for card in crossed.suffix(2) {
+                scheduleJourneyLog(text: "你不在時，路過了…\(card.logText)", after: delay)
+                delay += 3.0
+            }
         }
 
         if outcome.companionJustJoined {
