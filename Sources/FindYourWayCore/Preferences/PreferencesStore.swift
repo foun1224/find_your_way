@@ -20,7 +20,23 @@ public final class PreferencesStore {
         let hasVolume = defaults.object(forKey: PreferencesKey.volume) != nil
         let volume = hasVolume ? defaults.double(forKey: PreferencesKey.volume) : 1.0
 
-        return Preferences(reduceMotionOverride: reduceMotionOverride, volume: volume)
+        let windowOrigin = loadWindowOrigin()
+
+        return Preferences(reduceMotionOverride: reduceMotionOverride, volume: volume, windowOrigin: windowOrigin)
+    }
+
+    /// 讀出記憶的視窗位置（ADR-011）；兩個座標軸必須都寫過才視為「有記憶位置」，
+    /// 避免只寫了一半（例如寫入中途被中斷）造成座標其中一軸沿用舊值/預設值的錯位。
+    private func loadWindowOrigin() -> CGPoint? {
+        guard
+            defaults.object(forKey: PreferencesKey.windowOriginX) != nil,
+            defaults.object(forKey: PreferencesKey.windowOriginY) != nil
+        else {
+            return nil
+        }
+        let x = defaults.double(forKey: PreferencesKey.windowOriginX)
+        let y = defaults.double(forKey: PreferencesKey.windowOriginY)
+        return CGPoint(x: x, y: y)
     }
 
     /// 寫入 reduce motion 覆寫值；傳 `nil` 表示清除覆寫、回到跟隨系統。
@@ -34,5 +50,16 @@ public final class PreferencesStore {
 
     public func setVolume(_ value: Double) {
         defaults.set(value, forKey: PreferencesKey.volume)
+    }
+
+    /// 寫入拖曳後的視窗位置（ADR-011）；傳 `nil` 表示清除記憶、回到預設右下角落點。
+    public func setWindowOrigin(_ origin: CGPoint?) {
+        if let origin {
+            defaults.set(Double(origin.x), forKey: PreferencesKey.windowOriginX)
+            defaults.set(Double(origin.y), forKey: PreferencesKey.windowOriginY)
+        } else {
+            defaults.removeObject(forKey: PreferencesKey.windowOriginX)
+            defaults.removeObject(forKey: PreferencesKey.windowOriginY)
+        }
     }
 }

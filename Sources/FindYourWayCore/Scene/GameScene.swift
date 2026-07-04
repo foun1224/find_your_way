@@ -673,18 +673,16 @@ public final class GameScene: SKScene {
         )
     }
 
-    #if canImport(AppKit)
     /// 點角色 → 暖心回應（ADR-006 嚴格零功利：純情感，不碰 `GameState`/存檔/模擬）。
-    /// 只有 `ClickThroughController` 已把 `window.ignoresMouseEvents` 切為 `false`（游標正好在
-    /// 角色上）時，這個事件才可能發生；這裡仍再做一次 hit-test 作為保險（防止未來視窗設定變動
-    /// 讓非角色範圍的點擊漏進來）。
-    public override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
-        let point = event.location(in: self)
-        guard isPointOnCharacter(point) else { return }
+    ///
+    /// **ADR-011（拖曳+記住位置）**：`mouseDown` 不再自動觸發暖心回應——按下角色也可能是要
+    /// 「拖曳整個視窗」的起手勢。click-vs-drag 的判定（移動距離門檻）現在由執行檔層的
+    /// `PetWindow`（`sendEvent` 攔截 `mouseDown`/`mouseDragged`/`mouseUp`）負責：只有放開時
+    /// 確定「幾乎沒移動＝點擊」，才會呼叫這個 public 方法觸發暖心回應；移動超過門檻則視為拖曳，
+    /// 由 `PetWindow` 改為移動視窗，本次不呼叫這裡。
+    public func triggerWarmResponseFromConfirmedClick() {
         triggerWarmResponse()
     }
-    #endif
 
     /// 防連點節流（不是「不能點」，是同一瞬間只播一次，避免洗版式重複動畫）。
     private func triggerWarmResponse() {

@@ -9,9 +9,14 @@ public struct Preferences: Equatable {
     /// 音量預留欄位（`10` §10 待決 6：Phase 5 UI 先不放，但資料模型先留位）。
     public var volume: Double
 
-    public init(reduceMotionOverride: Bool? = nil, volume: Double = 1.0) {
+    /// 桌寵視窗記憶位置（ADR-011）：使用者拖曳後記住的視窗 origin；`nil` 表示「未拖曳過，
+    /// 用預設右下角」（`PetWindowConfig.bottomRightFrame`）。與遊戲主存檔分離，屬偏好同層。
+    public var windowOrigin: CGPoint?
+
+    public init(reduceMotionOverride: Bool? = nil, volume: Double = 1.0, windowOrigin: CGPoint? = nil) {
         self.reduceMotionOverride = reduceMotionOverride
         self.volume = volume
+        self.windowOrigin = windowOrigin
     }
 }
 
@@ -19,4 +24,6 @@ public struct Preferences: Equatable {
 public enum PreferencesKey {
     public static let reduceMotionOverride = "com.findyourway.preferences.reduceMotionOverride"
     public static let volume = "com.findyourway.preferences.volume"
+    public static let windowOriginX = "com.findyourway.preferences.windowOriginX"
+    public static let windowOriginY = "com.findyourway.preferences.windowOriginY"
 }

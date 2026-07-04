@@ -58,6 +58,36 @@ final class PreferencesStoreTests: XCTestCase {
         XCTAssertEqual(store.load().volume, 0.5, accuracy: 0.0001)
     }
 
+    func testWindowOriginNilByDefault() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        XCTAssertNil(store.load().windowOrigin)
+    }
+
+    func testWindowOriginRoundTrip() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        store.setWindowOrigin(CGPoint(x: 123.5, y: 67.25))
+
+        let loaded = store.load().windowOrigin
+        XCTAssertEqual(Double(loaded?.x ?? -1), 123.5, accuracy: 0.0001)
+        XCTAssertEqual(Double(loaded?.y ?? -1), 67.25, accuracy: 0.0001)
+    }
+
+    func testClearingWindowOriginReturnsToNil() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        store.setWindowOrigin(CGPoint(x: 10, y: 20))
+        store.setWindowOrigin(nil)
+
+        XCTAssertNil(store.load().windowOrigin)
+    }
+
+    func testWindowOriginDoesNotLeakIntoStandard() {
+        let isolated = makeIsolatedDefaults()
+        let store = PreferencesStore(defaults: isolated)
+        store.setWindowOrigin(CGPoint(x: 10, y: 20))
+
+        XCTAssertNil(UserDefaults.standard.object(forKey: PreferencesKey.windowOriginX))
+    }
+
     func testTwoStoresWithDifferentDefaultsAreIsolated() {
         let storeA = PreferencesStore(defaults: makeIsolatedDefaults("A"))
         let storeB = PreferencesStore(defaults: makeIsolatedDefaults("B"))

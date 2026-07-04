@@ -30,7 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
 
         let size = PetWindowConfig.defaultSize
-        let frame = PetWindowConfig.bottomRightFrame(visibleFrame: visibleFrame, windowSize: size)
+        // ADR-011：有記憶位置（且仍落在某個螢幕內）就開在該處，否則走既有右下角預設。
+        let frame = initialFrame(defaultVisibleFrame: visibleFrame, windowSize: size)
 
         // 啟動載檔 → 離線結算（ADR-005）。無存檔則以全新狀態起步，`lastActiveTimestamp` 設為現在，
         // 避免第一次啟動被誤判為「離開了 1970 年至今」的離線時間。
@@ -52,6 +53,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = PetWindow(contentRect: frame)
         window.presentScene(scene)
         window.showWithoutActivating()
+        // ADR-011：角色上放開時位移<門檻＝點擊 → 暖心回應；超過門檻＝拖曳 → 存記憶位置。
+        window.onCharacterClicked = { [weak self] in
+            self?.gameScene?.triggerWarmResponseFromConfirmedClick()
+        }
+        window.onWindowDragEnded = { [weak self] origin in
+            self?.preferencesStore.setWindowOrigin(origin)
+        }
         petWindow = window
 
         // 離線結算後立即存檔一次（`08` §3.6 存檔時機）。
@@ -180,7 +188,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
     }
 
-    // MARK: - 多螢幕穩定（`10` §7）：螢幕參數變更（接拔/解析度）時重新錨定到有效螢幕右下角。
+    // MARK: - 多螢幕穩定（`10` §7 / ADR-011）：螢幕參數變更（接拔/解析度）時重新錨定。
+
+    /// 啟動時的初始 frame：有記憶位置（ADR-011）且仍落在目前任一螢幕內就用它（夾在該螢幕
+    /// 可視範圍內，防止記憶位置在螢幕解析度變動後跑到畫面外）；否則走既有右下角預設。
+    private func initialFrame(defaultVisibleFrame: CGRect, windowSize: CGSize) -> CGRect {
+        guard let savedOrigin = preferencesStore.load().windowOrigin else {
+            return PetWindowConfig.bottomRightFrame(visibleFrame: defaultVisibleFrame, windowSize: windowSize)
+        }
+
+        let visibleFrames = NSScreen.screens.map { $0.visibleFrame }
+        guard let owningFrame = WindowPlacement.owningVisibleFrame(
+            for: savedOrigin,
+            windowSize: windowSize,
+            visibleFrames: visibleFrames
+        ) else {
+            // 記憶位置已不在任何螢幕內（例如當初的外接螢幕已拔除）→ 回退合理落點。
+            return PetWindowConfig.bottomRightFrame(visibleFrame: defaultVisibleFrame, windowSize: windowSize)
+        }
+
+        let clamped = WindowPlacement.clampedOrigin(savedOrigin, windowSize: windowSize, visibleFrame: owningFrame)
+        return CGRect(origin: clamped, size: windowSize)
+    }
 
     private func setUpScreenParameterObserver() {
         NotificationCenter.default.addObserver(
@@ -191,12 +220,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// 螢幕變更時：目前位置若仍落在某個螢幕內，只夾在該螢幕可視範圍內（保留使用者拖曳的落點，
+    /// 不無條件跳回右下角）；若已經懸空（該螢幕消失），才回退到有效螢幕右下角預設（`10` §7）。
     @objc private func handleScreenParametersChanged() {
         guard let window = petWindow else { return }
-        // 主螢幕消失時 fallback 到第一個可用螢幕，避免落到不存在的螢幕外（`10` §7）。
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let frame = PetWindowConfig.bottomRightFrame(visibleFrame: visibleFrame, windowSize: PetWindowConfig.defaultSize)
+        let size = PetWindowConfig.defaultSize
+
+        let visibleFrames = NSScreen.screens.map { $0.visibleFrame }
+        let currentOrigin = window.frame.origin
+
+        let frame: CGRect
+        if let owningFrame = WindowPlacement.owningVisibleFrame(
+            for: currentOrigin,
+            windowSize: size,
+            visibleFrames: visibleFrames
+        ) {
+            let clamped = WindowPlacement.clampedOrigin(currentOrigin, windowSize: size, visibleFrame: owningFrame)
+            frame = CGRect(origin: clamped, size: size)
+        } else {
+            frame = PetWindowConfig.bottomRightFrame(visibleFrame: visibleFrame, windowSize: size)
+        }
         window.setFrame(frame, display: true)
     }
 
