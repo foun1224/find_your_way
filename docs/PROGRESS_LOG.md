@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 4 後：心理學迭代 + 無邊世界 + 拖曳
+
+六階段完成後的深化（皆 Fable 截圖/真機驗收、里程碑自動提交）：
+- **Polish**：切圖去斑（角色+道具）、遠中景接縫柔化、走路改乾淨 2 拍（臨時；真左右交替待重生素材）。
+- **P1+P2 心理學微行為**（`13_PSYCH_AUDIT`）：主角待機呼吸 + 偶爾看向你（front 幀 + HeroRestSchedule）+ 游標靠近回應（ProximityAwareness）。修正「主角比旅伴呆板」。distance 不變式保留。
+- **晝夜光影+天氣（4c）**：DayNightCycle/Weather 純函式 overlay；Fable 抓修 alpha 相乘 bug + 調強設計值。
+- **故事線（14）+ 無邊世界（15）**：使用者要「廣大無邊境、不會有終幕」的溫柔中古魔幻（無黑暗勢力）。推翻石門終幕，改 Region Band 沿里程無限展開；Encounter Card 為最小內容單位；無邊≠無盡刷的紅線劃分。
+- **Stage A（16）無邊 MVP**：Season 純函式+四季色調 overlay（綁里程）、EncounterDeck 相遇卡系統（不持久不收集）。**卡組 24→76 張**（`17`，Opus 草擬 Fable curate）。companion 卡去性別化 + 相遇前不出 companion 閘門。
+- **拖曳（ADR-011）**：抓角色拖曳移動桌寵 + 記住位置（UserDefaults）+ 螢幕夾取純函式；短按仍暖心。
+- 測試 226 綠。commit 多筆（…b6639d9 Stage A / 1d011b5 卡擴充 / 769681d companion polish）。
+
+**待使用者**：拖曳手感回饋；**Stage B 需新地域美術**（使用者用 ChatGPT 生新地形素材表 → 接第二地域）；/Applications 目前是拖曳版，「全功能版（拖曳+四季+76卡+微行為）」待使用者說要就更新安裝。
+**未來 polish**：真左右交替走路素材、companion 卡母本 24 張也去性別化、季節色調明顯度可調、P3 可回顧旅程日誌（`13` 高價值高成本）。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 4a/4b/4c（像素美術 + 晝夜天氣）
 
 使用者用 ChatGPT 產出像素素材表（`design/assets/asset_sheet.png`：兩角色4向走路+道具+分層背景，側面橫向捲軸）。分期整合，每期 Fable 親自 build+截圖驗收（Sonnet 施工、Fable 抓 bug 修）：
