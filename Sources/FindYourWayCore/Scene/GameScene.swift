@@ -194,14 +194,16 @@ public final class GameScene: SKScene {
         }
     }
 
-    /// `FYW_DEBUG_REGION`（`meadow`/`kingdom`）：強制指定地域，方便 Fable 截圖王國畫面
-    /// 不必真的走 4h（`18_STAGE_B_SPEC.md` §4）。只影響「一開始顯示哪個地域」；不指定時
-    /// 照常依 `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
+    /// `FYW_DEBUG_REGION`（`meadow`/`kingdom`/`sea_city`，海城也接受 `seacity` 別名）：
+    /// 強制指定地域，方便 Fable 截圖三地域畫面不必真的走 8h（`18_STAGE_B_SPEC.md` §4 /
+    /// `19_STAGE_C_SPEC.md` §4）。只影響「一開始顯示哪個地域」；不指定時照常依
+    /// `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
     private static func debugRegionOverride() -> RegionType? {
         guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_REGION"] else { return nil }
         switch raw.lowercased() {
         case "meadow": return .meadowOrigin
         case "kingdom": return .kingdom
+        case "sea_city", "seacity": return .seaCity
         default: return nil
         }
     }

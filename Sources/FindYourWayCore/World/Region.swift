@@ -1,8 +1,9 @@
 import Foundation
 
-/// Region skeleton（`16_STAGE_A_SPEC.md` §2.3b，Stage B 擴充見 `18_STAGE_B_SPEC.md` §2）：
-/// 薄骨架，為地域美術預留掛點。`riverlands`/`highlands`/`coastalReach` 尚無美術，
-/// 保留骨架供未來地域擴充；**目前上線的序列只交替 `meadowOrigin` 與 `kingdom` 兩個有美術的地域**。
+/// Region skeleton（`16_STAGE_A_SPEC.md` §2.3b，Stage B 擴充見 `18_STAGE_B_SPEC.md` §2，
+/// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2）：薄骨架，為地域美術預留掛點。
+/// `riverlands`/`highlands` 尚無美術，保留骨架供未來地域擴充；
+/// **目前上線的序列是 `meadowOrigin` → `kingdom` → `seaCity` 三地域循環**。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -10,10 +11,13 @@ public enum RegionType: Equatable, CaseIterable {
     case highlands
     case coastalReach
     case kingdom
+    case seaCity
 
-    /// Stage B 上線序列（`18` §2）：只有 meadow + kingdom 兩個有美術的地域交替；
+    /// Stage C 上線序列（`19` §2）：meadow → kingdom → seaCity 三個有美術的地域循環；
     /// 其餘骨架 case 保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
-    private static let cycle: [RegionType] = [.meadowOrigin, .kingdom]
+    /// `coastalReach` 骨架 case 沿用既有命名保留給未來地域，跟新上線的 `seaCity`（港口海城，
+    /// 有實際美術）是兩個不同的 case，避免語意混淆、也不影響既有測試對骨架 case 的引用。
+    private static let cycle: [RegionType] = [.meadowOrigin, .kingdom, .seaCity]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
         let count = cycle.count
@@ -21,13 +25,14 @@ public enum RegionType: Equatable, CaseIterable {
         return cycle[normalized]
     }
 
-    /// 地域對應的美術資源夾名稱（`Resources/art/regions/<name>/`，`18` §1）：
+    /// 地域對應的美術資源夾名稱（`Resources/art/regions/<name>/`，`18` §1 / `19` §1）：
     /// `ParallaxBackground`/`PropScatter` 依此挑該地域的背景/地面/道具。尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）暫時歸類回 meadow 資源夾；`Region.at` 目前不會選到
-    /// 它們（`cycle` 只有 meadow/kingdom），這裡只是保底、避免未來誤用時找不到資源夾。
+    /// 它們（`cycle` 只有 meadow/kingdom/seaCity），這裡只是保底、避免未來誤用時找不到資源夾。
     public var assetFolder: String {
         switch self {
         case .kingdom: return "kingdom"
+        case .seaCity: return "sea_city"
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return "meadow"
         }
     }

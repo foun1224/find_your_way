@@ -34,12 +34,13 @@ public enum KingdomNpcScatter {
         Slot(baseX: 660, npcName: "soldier"),
     ]
 
-    /// 依地域挑選 NPC 槽位表：只有王國有市民，其餘地域回傳空陣列（`18` §3 同款「依地域選池」
-    /// 保底邏輯，只是保底是「沒有」而非退回另一張表——草原是空曠原野，不該無中生有冒出行人）。
+    /// 依地域挑選 NPC 槽位表：只有王國有市民，其餘地域回傳空陣列（`18` §3 / `19` §3 同款
+    /// 「依地域選池」保底邏輯，只是保底是「沒有」而非退回另一張表——草原是空曠原野、
+    /// 海城本階段無角色列可切（`19` §0/§1），都不該無中生有冒出行人）。
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
         case .kingdom: return kingdomSlots
-        case .meadowOrigin, .riverlands, .highlands, .coastalReach: return []
+        case .meadowOrigin, .riverlands, .highlands, .coastalReach, .seaCity: return []
         }
     }
 

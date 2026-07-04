@@ -25,6 +25,7 @@ final class KingdomNpcScatterTests: XCTestCase {
         XCTAssertTrue(KingdomNpcScatter.slots(for: .riverlands).isEmpty)
         XCTAssertTrue(KingdomNpcScatter.slots(for: .highlands).isEmpty)
         XCTAssertTrue(KingdomNpcScatter.slots(for: .coastalReach).isEmpty)
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .seaCity).isEmpty, "海城本階段無角色列可切，不該冒出市民（`19` §1/§3）")
     }
 
     func testScreenXIsDeterministicForSameDistance() {

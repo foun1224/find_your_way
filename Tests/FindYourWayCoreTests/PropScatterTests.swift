@@ -75,4 +75,23 @@ final class PropScatterTests: XCTestCase {
         XCTAssertEqual(PropScatter.slots(for: .meadowOrigin), PropScatter.slots)
         XCTAssertEqual(PropScatter.slots(for: .kingdom), PropScatter.kingdomSlots)
     }
+
+    // MARK: - 港口海城道具池（`19_STAGE_C_SPEC.md` §1/§3，第三地域）
+
+    func testSeaCitySlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.seaCitySlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "海城槽位表應依 baseX 遞增排列")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.seaCitySlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksSeaCityPool() {
+        XCTAssertEqual(PropScatter.slots(for: .seaCity), PropScatter.seaCitySlots)
+    }
 }

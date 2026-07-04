@@ -19,6 +19,8 @@ from dataclasses import dataclass
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET_SHEET = os.path.join(REPO_ROOT, "design", "assets", "asset_sheet.png")
 KINGDOM_SHEET = os.path.join(REPO_ROOT, "design", "kingdom.png")
+KINGDOM_CHARACTERS_SHEET = os.path.join(REPO_ROOT, "design", "kingdom_characters.png")
+SEA_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sea_city.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -193,6 +195,54 @@ def chroma_key_flood(img: Image, threshold: int = 28) -> Image:
     return out
 
 
+def chroma_key_flood_color(img: Image, bg_color, threshold: int = 30) -> Image:
+    """近黑底去背（顏色距離版）：`chroma_key_flood` 用「亮度 < threshold」判斷背景，適合背景
+    接近純黑（`#1B1B1B` 系）的舊素材表；Stage C 新版 kingdom.png / sea_city.png 底部道具列畫布
+    背景其實是偏藍的深灰（約 RGB(30,41,55)，亮度已到 ~40），跟不少道具本體的暗部（黑色鐵件、
+    深色木頭陰影）亮度區間重疊（12～50 都有），純亮度门檻分不開兩者——亮度門檻調高到蓋住
+    背景，會連道具暗部一起流失；調低則背景本身流不掉。
+    改用「與已知背景色的歐氏距離」分背景/本體：背景是同一張畫布，顏色一致（只有些微漸層/雜訊），
+    跟背景『同色系』的像素距離很小；道具的黑色鐵件、深色木頭雖然亮度相近，色相不同
+    （更中性灰或偏棕，不是背景那種偏藍深灰），距離明顯較大，因此能在亮度重疊的情況下正確分離。
+    只把「從畫布四邊 flood-fill 連通、且與 bg_color 距離 < threshold」的像素轉透明，
+    手法（flood-fill 而非全圖门檻）與 `chroma_key_flood` 相同，本體暗部不連到邊界不會被誤挖空。
+    """
+    w, h = img.width, img.height
+    bg_r, bg_g, bg_b = bg_color[:3]
+
+    def close_to_bg(rgba) -> bool:
+        r, g, b, _ = rgba
+        dist_sq = (r - bg_r) ** 2 + (g - bg_g) ** 2 + (b - bg_b) ** 2
+        return dist_sq < threshold * threshold
+
+    visited = [[False] * w for _ in range(h)]
+    out = Image(w, h, [row[:] for row in img.pixels])
+
+    stack = []
+    for x in range(w):
+        stack.append((x, 0))
+        stack.append((x, h - 1))
+    for y in range(h):
+        stack.append((0, y))
+        stack.append((w - 1, y))
+
+    while stack:
+        x, y = stack.pop()
+        if x < 0 or x >= w or y < 0 or y >= h or visited[y][x]:
+            continue
+        visited[y][x] = True
+        if not close_to_bg(img.get(x, y)):
+            continue
+        r, g, b, _ = out.get(x, y)
+        out.set(x, y, (r, g, b, 0))
+        stack.append((x + 1, y))
+        stack.append((x - 1, y))
+        stack.append((x, y + 1))
+        stack.append((x, y - 1))
+
+    return out
+
+
 def despeckle_neutral_residue(img: Image, lo: int = 24, hi: int = 45, max_spread: int = 8) -> Image:
     """清掉「殘留背景色」的雜點像素：素材表底色是近乎無彩度的深灰 #1B1B1B（≈27,27,27），
     跟 `chroma_key_flood` 的 threshold（28）太接近，邊界像素常落在 27-33 附近而漏網
@@ -246,6 +296,78 @@ def keep_largest_component(img: Image) -> Image:
                 best_pixels = pixels
 
     keep = set(best_pixels)
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for y in range(h):
+        for x in range(w):
+            if out.pixels[y][x][3] > 0 and (x, y) not in keep:
+                r, g, b, _ = out.pixels[y][x]
+                out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
+def keep_largest_component_dilated(img: Image, dilate_px: int = 2) -> Image:
+    """`keep_largest_component` 的強化版：先把 alpha 遮罩做 Chebyshev 距離 `dilate_px` 的
+    形態學膨脹，再用膨脹後的遮罩做 4-連通元件分析選出「最大連通塊」，最後只保留落在該
+    最大連通塊範圍內的『原始』不透明像素（膨脹只用來決定連通性/誰是最大塊，不會真的
+    新增任何不透明像素——輸出的 alpha 值完全等於輸入）。
+    動機（Stage C QA 發現的燈柱斷桿問題）：`chroma_key_flood_color` 逐像素判斷背景色距離，
+    細長桿狀部件（燈柱柱身、旗桿等）只有 ~3-4px 寬，若某幾列桿身像素顏色恰好非常接近
+    背景色（例如陰影處），會被單獨誤判成背景挖空，把桿子從中間切成兩段互不相連的
+    alpha 色塊；`keep_largest_component` 只看嚴格 4-連通，就會把面積較小的那段（通常是
+    桿身+底座）整段當雜訊丟棄，只留下面積較大的那段（通常是燈頭），造成道具殘缺。
+    用膨脹後的遮罩判斷連通性，能讓中間 1-2px 的斷點在「是否算同一塊」的判斷上被跨過，
+    避免整段被誤刪，同時因為最終只保留原始不透明像素、不新增任何像素，不會讓道具邊緣
+    變粗糊或引入額外雜訊。
+    """
+    w, h = img.width, img.height
+    opaque = [[img.pixels[y][x][3] > 0 for x in range(w)] for y in range(h)]
+
+    dilated = [[False] * w for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            if opaque[y][x]:
+                dilated[y][x] = True
+                continue
+            found = False
+            for dy in range(-dilate_px, dilate_px + 1):
+                ny = y + dy
+                if ny < 0 or ny >= h:
+                    continue
+                for dx in range(-dilate_px, dilate_px + 1):
+                    nx = x + dx
+                    if nx < 0 or nx >= w:
+                        continue
+                    if opaque[ny][nx]:
+                        found = True
+                        break
+                if found:
+                    break
+            dilated[y][x] = found
+
+    visited = [[False] * w for _ in range(h)]
+    best_component: list = []
+    best_original_count = -1
+
+    for sy in range(h):
+        for sx in range(w):
+            if visited[sy][sx] or not dilated[sy][sx]:
+                continue
+            stack = [(sx, sy)]
+            visited[sy][sx] = True
+            comp = []
+            while stack:
+                x, y = stack.pop()
+                comp.append((x, y))
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and dilated[ny][nx]:
+                        visited[ny][nx] = True
+                        stack.append((nx, ny))
+            original_count = sum(1 for (x, y) in comp if opaque[y][x])
+            if original_count > best_original_count:
+                best_original_count = original_count
+                best_component = comp
+
+    keep = set(best_component)
     out = Image(w, h, [row[:] for row in img.pixels])
     for y in range(h):
         for x in range(w):
@@ -408,41 +530,59 @@ BG_MID_TOP_FADE_PX = 22
 
 
 # ---------------------------------------------------------------------------
-# 王國首都座標設定表（`18_STAGE_B_SPEC.md` §1，由 Read design/kingdom.png 目視 +
-# 逐像素亮度掃描校準，1536x1024，與 asset_sheet.png 同尺寸但是獨立素材表）。
+# 王國首都座標設定表（Stage C `19_STAGE_C_SPEC.md` §1，由 Read design/kingdom.png 目視 +
+# 逐像素亮度/連通元件掃描校準，1774x887，Fable 提供的更精緻重繪版，取代舊 1536x1024 版本，
+# 座標與舊版完全無法沿用——版面比例不同，重新校準。）
 # ---------------------------------------------------------------------------
 
-# 內容區左右邊界：與 asset_sheet.png 同款留白版式，逐像素掃描找到左右內容邊界
-# （x=96 起、x=1510 止，兩側外面是畫布留白的近黑色）。
-# 背景四層 y 範圍：以逐像素亮度掃描找分區間的斷點（見校準時的 inspect 紀錄）：
-#   遠景（城堡群+山+雲）：       y=57..187（斷點 188/189 轉近黑）
-#   中景（藍頂塔樓密城）：       y=192..313（斷點 314/315 轉近黑）
-#   前景（旗幟石牆+燈柱+樹+門）：y=321..443（斷點 444 轉近黑）
-#   地面平台（灰石板）：         y=464..542（斷點 543 轉近黑）
-KINGDOM_BG_FAR = Region(x=96, y=57, w=1415, h=131)
-KINGDOM_BG_MID = Region(x=96, y=192, w=1415, h=122)
-KINGDOM_BG_FORE = Region(x=96, y=321, w=1415, h=123)
-KINGDOM_BG_GROUND = Region(x=96, y=464, w=1415, h=79)
+# 內容左右邊界：新版與舊版不同——整張圖沒有「留白邊界欄」，遠/中/前景場景內容本身
+# 直接畫到左右兩側畫布邊緣（x=0 起到 x=1774 止，逐欄亮度掃描確認左右兩側都是滿版場景色，
+# 不是近黑留白）。但每層左上角疊了一塊「遠景/中景/前景/地面平台」中文標籤黑底方框
+# （蓋在場景內容上，不是獨立留白欄——與舊版留白版式不同），裁完後用 `patch_label_box` 蓋掉
+# （見下方 `KINGDOM_LABEL_BOX_RECTS`），否則水平無縫平鋪時方框會每個 tile 週期性重複出現。
+#
+# 背景四層 y 範圍：以逐像素亮度掃描 + 標籤方框位置交叉校準（方框永遠貼齊自己所屬圖層的
+# 左上角，方框出現的 y 位置＝該圖層的起點附近，比場景內容本身的漸層亮度斷點更可靠）：
+#   遠景（城堡群+河+橋+雲）：      y=0..236（237/238 起亮度陡升，轉中景自己的天空）
+#   中景（藍頂塔樓城牆密城）：    y=237..462（前景標籤方框貼齊 463 起點）
+#   前景（旗幟石牆+燈柱+桶箱車花）：y=463..584（往下漸暗轉地面平台石板的陰影帶）
+#   地面平台（灰石板走道）：      y=585..634（635/636 起陡降轉近黑，是底部道具列畫布）
+KINGDOM_BG_FAR = Region(x=0, y=0, w=1774, h=237)
+KINGDOM_BG_MID = Region(x=0, y=237, w=1774, h=226)
+KINGDOM_BG_FORE = Region(x=0, y=463, w=1774, h=122)
+KINGDOM_BG_GROUND = Region(x=0, y=585, w=1774, h=50)
+
+# 各層左上角標籤方框（相對於該層裁切後的區域座標，供 `patch_label_box` 蓋掉）：
+# 方框大小/位置在遠景/中景/前景三層一致（同一套 UI 素材），逐層獨立校準。
+# 地面平台層沒有方框——「地面平台」文字方框實際疊在更下面的道具列畫布上（見
+# `KINGDOM_PROP_REGIONS` 校準時的觀察），地面平台裁切範圍本身乾淨、不需要 patch。
+KINGDOM_LABEL_BOX_RECTS: dict = {
+    "far": Region(x=5, y=14, w=145, h=60),
+    "mid": Region(x=5, y=6, w=145, h=56),
+    "fore": Region(x=5, y=3, w=145, h=50),
+}
 
 # mid 疊在 far 之前、fore 疊在 mid 之前，皆有小段上緣重疊（`ParallaxBackground` 對應 overlap 常數），
 # 各自獨立 panorama，淡出上緣讓接縫變成漸層過渡（同 `BG_MID_TOP_FADE_PX` 手法）。
 KINGDOM_BG_MID_TOP_FADE_PX = 18
 KINGDOM_BG_FORE_TOP_FADE_PX = 14
 
-# 道具／互動物件：素材表右下角區塊。逐一目視校準座標（見校準時的連通元件偵測輔助），
-# 範圍刻意留餘裕，去背 + autocrop 後收斂到道具本身的精確 bounding box。
+# 道具／互動物件：新版 kingdom.png 底部道具列（y=636..887，近黑色畫布），逐一目視校準座標
+# （先用「欄有無亮於背景像素」做連通分段掃描抓出候選範圍，再逐一裁切 Read 目視確認身份、
+# 命名依實際外觀）。素材表最左側 3 格是牆面/短柱材質色板（非獨立道具，供環境圖層本身使用，
+# 不適合當散落道具——花箱/欄杆之類「有機」道具才需要細部去背，牆材質色板本身就是矩形色塊，
+# 沒有散落擺放的意義），故本表不收錄。範圍刻意留餘裕，去背 + autocrop 後收斂到精確 bounding box。
 KINGDOM_PROP_REGIONS: dict = {
-    "banner": Region(x=995, y=618, w=150, h=168),
-    "market_stall": Region(x=1125, y=635, w=145, h=150),
-    "crate": Region(x=1282, y=642, w=68, h=70),
-    "lamppost": Region(x=1428, y=602, w=96, h=198),
-    "cart": Region(x=988, y=778, w=158, h=102),
-    "potted_flower": Region(x=1153, y=780, w=82, h=92),
-    "tree": Region(x=1322, y=768, w=118, h=228),
-    "signpost": Region(x=1248, y=798, w=102, h=112),
-    "fountain": Region(x=1008, y=870, w=142, h=128),
-    "statue": Region(x=1153, y=860, w=82, h=138),
-    "bench": Region(x=1233, y=913, w=132, h=82),
+    "lamppost": Region(x=510, y=636, w=90, h=251),
+    "banner": Region(x=574, y=636, w=132, h=251),
+    "crate": Region(x=696, y=636, w=100, h=251),
+    "barrel": Region(x=785, y=636, w=107, h=251),
+    "cart": Region(x=885, y=636, w=136, h=251),
+    "crate_reinforced": Region(x=1010, y=636, w=140, h=251),
+    "planter": Region(x=1160, y=636, w=110, h=251),
+    "fence": Region(x=1300, y=636, w=172, h=251),
+    "fence_low": Region(x=1461, y=636, w=182, h=251),
+    "pillar": Region(x=1638, y=636, w=106, h=251),
 }
 
 
@@ -491,6 +631,30 @@ def slice_props(sheet: Image) -> dict:
     return out
 
 
+def patch_label_box(img: Image, rect: "Region") -> Image:
+    """蓋掉素材表上疊在場景內容之上的「遠景/中景/前景/地面平台」中文標籤黑底方框
+    （Stage C 新版 kingdom.png / sea_city.png 的方框是直接疊在畫面左上角內容上，不是像舊版
+    asset_sheet.png / 舊 kingdom.png 那樣留一條獨立的留白邊界——若照舊只裁 x 起點跳過方框，
+    這裡因為方框只佔內容角落一小塊，硬跳過整欄會裁掉方框右側的合法內容）。
+    做法：把 `rect` 這塊區域整個用「`rect` 正上方那一列像素」往下重複貼滿，蓋掉黑底文字方框。
+    背景在方框所在位置多半是天空/牆面等變化平緩的漸層，用上緣那一列重複填滿，
+    視覺上會是一小段平頂色塊，遠比保留黑底方框自然；且此圖層會做水平無縫平鋪，
+    方框不處理掉的話會在畫面上週期性重複出現，比單次的色塊瑕疵更顯眼。
+    若 `rect.y == 0`（方框緊貼裁切區頂緣，例如 sea_city.png 前景層方框），正上方已經沒有
+    合法背景可取（那一列還是方框本身），改用「正下方那一列」（方框底下已經是真正的場景內容）
+    往上重複貼滿，效果相同、方向相反。
+    """
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    if rect.y <= 0:
+        src_y = min(img.height - 1, rect.y + rect.h)
+    else:
+        src_y = rect.y - 1
+    for y in range(max(0, rect.y), min(img.height, rect.y + rect.h)):
+        for x in range(max(0, rect.x), min(img.width, rect.x + rect.w)):
+            out.pixels[y][x] = out.pixels[src_y][x]
+    return out
+
+
 def fade_top_edge(img: Image, fade_px: int) -> Image:
     """把 `img` 最上緣 `fade_px` 列做垂直 alpha 漸層淡出（頂端 alpha=0，`fade_px` 列處回到原 alpha）。
     用途：`bg/mid.png` 疊在 `bg/far.png` 之前（`ParallaxBackground` mid/far 有重疊區，
@@ -507,31 +671,42 @@ def fade_top_edge(img: Image, fade_px: int) -> Image:
     return out
 
 
-# 王國道具在素材表上彼此間距較窄（`18` §1 校準時發現的風險）：`KINGDOM_PROP_REGIONS` 的裁切框
-# 為求完整框住每個道具，邊界會與鄰近道具的裁切框「矩形」略有重疊（但實際像素連通分量不重疊，
-# 校準時用連通元件偵測驗證過）。兩種去雜點策略視道具形狀選用：
-# - `keep_largest_component`（同角色走路 frame 手法）：只留裁切框內最大的連通塊。適合本體
-#   是單一連通塊、沒有細長分離部件的道具（樹/木箱）；細長部件（如燈柱的柱身、路標的柱腳、
-#   長椅的椅腳）常因去背/去雜點在細窄處斷開變成多個小連通塊，套這招會誤刪本體的一部分。
-# - `remove_small_components`（同既有 `slice_props` 手法，但門檻拉高到 80）：保留裁切框內
-#   所有「夠大」的連通塊（含細長分離部件），只清掉裁切框邊緣帶到的鄰居道具碎片（通常明顯小於
-#   80 像素）。適合本體有細長/分離部件的道具，也是大部分王國道具的預設策略。
-_KINGDOM_LARGEST_COMPONENT_PROPS = {"tree", "crate"}
+# Stage C 新版 kingdom.png 道具（`KINGDOM_PROP_REGIONS`）去雜點策略：
+# - `keep_largest_component`：本體是「單一連通塊」、沒有細長分離部件的道具——燈柱/旗幟/木箱/
+#   木桶/貨車/石柱本體造型雖然有細桿（燈柱柱身、旗幟旗桿、石柱本身），但桿身跟底座/主體像素
+#   相連成一塊，不會被誤判成小雜點清掉，用「只留最大連通塊」最乾淨、順便清掉鄰居道具碎片。
+# - `remove_small_components`（面積門檻，同既有 `slice_props` 手法）：本體「本來就有分離部件」
+#   的道具——花箱（箱體+花叢，花瓣末梢常因去背斷開變小碎塊）、欄杆（扶手柱之間本來就有透空
+#   間隙，是好幾根柱子的集合，不是單一連通塊）——用最大連通塊會誤刪成只剩一根柱子。
+_KINGDOM_LARGEST_COMPONENT_PROPS = {"lamppost", "banner", "crate", "crate_reinforced", "barrel", "cart", "pillar"}
 _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA = 80
 _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES: dict = {}
 
-# 少數道具（例如 signpost）裁切框右上角直接「貼著」鄰居的樹冠陰影——鄰居像素與本體
-# 的招牌板边缘實際相連（連通），連通元件過濾法對「貼在一起」的鄰居碎片無效（`slice_assets.py`
-# 既有 `despeckle_neutral_residue` 註解也點出同樣的限制）。這裡改用最直接的作法：
-# 裁切後（去背前）直接把已知的鄰居碎片矩形（裁切框內的區域座標）填成透明，
-# 校準時目視 + 網格疊圖找出的座標，僅對該道具生效、不影響其餘像素。
+# 道具列畫布上緣（裁切框相對 y=0..~68）其實是一整條青苔石牆「背板」紋理，橫跨整張素材表
+# 寬度、跟旁邊道具的背板紋理連成同一塊（不是雜點，是刻意畫的展示背板），色彩/亮度都跟真正
+# 道具本體重疊，`chroma_key_flood_color`／`remove_small_components`／`keep_largest_component`
+# 都無法單純用顏色或面積分開它——校準時發現它會被誤判成「最大連通塊」（贏過矮小道具本體）
+# 或以「大於門檻的鄰居碎片」身分留下來。這裡改用最直接的作法：裁切後（去背前）直接把背板所在的
+# 矩形區域填成透明，跟舊版 kingdom.png `signpost`/`tree` 用的 `_apply_exclude_rects` 手法一致。
+# 大多數道具本體全部落在背板下方（不需要背板那段），可以整條清空；只有燈柱的燈頭會伸進背板
+# 高度——燈柱用「左右兩側」exclude rect（保留中間燈頭/燈柱那條窄窗），其餘道具直接整條清空。
 _KINGDOM_PROP_EXCLUDE_RECTS: dict = {
-    "signpost": [Region(x=58, y=0, w=44, h=42)],
-    "tree": [
-        Region(x=0, y=0, w=118, h=12),   # 最上緣一整條：燈柱橫臂碎片（樹冠尚未開始，y<12 全清安全）
-        Region(x=0, y=12, w=65, h=85),   # 左上：燈柱剪影貼在樹冠左側的碎片（樹冠這段只長在 x>=65）
-        Region(x=0, y=140, w=50, h=90),  # 左下：長椅椅背貼在樹幹旁的碎片（樹幹這段只長在 x>=65）
+    "lamppost": [
+        Region(x=0, y=0, w=25, h=70),   # 背板左側
+        Region(x=65, y=0, w=25, h=70),  # 背板右側（中間 x=25..65 留給燈頭/燈柱）
     ],
+    "banner": [
+        Region(x=0, y=0, w=45, h=45),    # 背板左上角
+        Region(x=90, y=0, w=42, h=45),   # 背板右上角（中間 x=45..90 留給旗桿橫臂/尖頂裝飾）
+    ],
+    "crate": [Region(x=0, y=0, w=100, h=68)],
+    "barrel": [Region(x=0, y=0, w=107, h=68)],
+    "cart": [Region(x=0, y=0, w=136, h=100)],
+    "crate_reinforced": [Region(x=0, y=0, w=140, h=68)],
+    "planter": [Region(x=0, y=0, w=148, h=68)],
+    "fence": [Region(x=0, y=0, w=172, h=68)],
+    "fence_low": [Region(x=0, y=0, w=182, h=68)],
+    "pillar": [Region(x=0, y=0, w=106, h=68)],
 }
 
 
@@ -571,9 +746,15 @@ def slice_kingdom_npcs(sheet: Image) -> dict:
     return out
 
 
+# 王國道具列畫布背景色（Stage C 新版 kingdom.png，逐像素取樣畫布邊角確認，見 `chroma_key_flood_color`
+# 說明——這張畫布背景是偏藍深灰，亮度已到 ~40，跟不少道具暗部亮度重疊，改用顏色距離去背）。
+_KINGDOM_PROP_BG_COLOR = (31, 42, 54)
+
+
 def slice_kingdom_props(sheet: Image) -> dict:
-    """王國道具切圖：與 `slice_props` 同一套去背流程，座標表換成 `KINGDOM_PROP_REGIONS`
-    （`18` §1）；去雜點/去鄰居碎片策略見 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明。"""
+    """王國道具切圖：座標表 `KINGDOM_PROP_REGIONS`（`19_STAGE_C_SPEC.md` §1）；
+    去背用 `chroma_key_flood_color`（畫布背景亮度跟部分道具暗部重疊，見其說明）；
+    去雜點/去鄰居碎片策略見 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明。"""
     out = {}
     for name, region in KINGDOM_PROP_REGIONS.items():
         w = min(region.w, sheet.width - region.x)
@@ -581,12 +762,87 @@ def slice_kingdom_props(sheet: Image) -> dict:
         cropped = sheet.crop(region.x, region.y, w, h)
         if name in _KINGDOM_PROP_EXCLUDE_RECTS:
             cropped = _apply_exclude_rects(cropped, _KINGDOM_PROP_EXCLUDE_RECTS[name])
-        keyed = chroma_key_flood(cropped, threshold=28)
+        keyed = chroma_key_flood_color(cropped, _KINGDOM_PROP_BG_COLOR, threshold=16)
         if name in _KINGDOM_LARGEST_COMPONENT_PROPS:
-            keyed = keep_largest_component(keyed)
+            # 用膨脹連通版而非原始 `keep_largest_component`：細長桿狀部件（燈柱柱身、
+            # 旗桿）在色距去背下可能因陰影處顏色貼近背景而被攔腰挖空，見
+            # `keep_largest_component_dilated` docstring（Stage C QA 發現的燈柱斷桿問題）。
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
         else:
             min_area = _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES.get(name, _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA)
             keyed = remove_small_components(keyed, min_area=min_area)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 港口海城座標設定表（Stage C `19_STAGE_C_SPEC.md` §1，第三地域，由 Read design/sea_city.png
+# 目視 + 逐像素亮度/連通元件掃描校準，1536x1024）。
+# ---------------------------------------------------------------------------
+
+# 與 kingdom.png 同款版式（無留白邊界欄，內容滿版到左右畫布邊緣；每層左上角疊標籤黑底方框）。
+# 背景四層 y 範圍（方框位置 + 內容亮度斷點交叉校準，同 kingdom.png 手法）：
+#   遠景（海岸城+燈塔+帆船+雲）：  y=0..243
+#   中景（港埠城鎮+大帆船）：      y=244..484
+#   前景（碼頭+大帆船+海港建築+旗幟）：y=485..708
+#   地面平台（碼頭石板）：         y=709..762（763 起「地面平台」標籤方框開始疊在道具列畫布上，
+#                                   裁到 762 為止可以完全避開方框，不需要 `patch_label_box`）
+SEA_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=244)
+SEA_CITY_BG_MID = Region(x=0, y=244, w=1536, h=241)
+SEA_CITY_BG_FORE = Region(x=0, y=485, w=1536, h=224)
+SEA_CITY_BG_GROUND = Region(x=0, y=709, w=1536, h=54)
+
+# 各層左上角標籤方框（同 `KINGDOM_LABEL_BOX_RECTS` 手法，相對於該層裁切後的區域座標）。
+SEA_CITY_LABEL_BOX_RECTS: dict = {
+    "far": Region(x=5, y=8, w=150, h=72),
+    "mid": Region(x=0, y=10, w=155, h=85),
+    "fore": Region(x=5, y=0, w=115, h=58),
+}
+
+SEA_CITY_BG_MID_TOP_FADE_PX = 18
+SEA_CITY_BG_FORE_TOP_FADE_PX = 14
+
+# 道具／互動物件：底部道具列（y=800..1024，近黑色畫布），逐一目視校準座標，命名依實際外觀。
+# 同 kingdom.png，最左側 3 格是牆面/短柱材質色板，非散落道具，不收錄。
+# 「繫纜柱」「吊車」是海城特有（碼頭意象），其餘與王國同款道具（燈柱/旗幟/木箱/木桶/花箱/欄杆/石柱）
+# 重新繪製過、素材不共用，需各自獨立切一份。
+SEA_CITY_PROP_REGIONS: dict = {
+    "lamppost": Region(x=436, y=800, w=46, h=224),
+    "banner": Region(x=497, y=800, w=68, h=224),
+    "crate": Region(x=590, y=800, w=90, h=224),
+    "barrel": Region(x=692, y=800, w=68, h=224),
+    "bollard": Region(x=751, y=800, w=112, h=224),
+    "crane": Region(x=871, y=800, w=172, h=224),
+    "crate_sack": Region(x=1047, y=800, w=152, h=224),
+    "planter": Region(x=1195, y=800, w=106, h=224),
+    "fence": Region(x=1312, y=800, w=136, h=224),
+    "pillar": Region(x=1459, y=800, w=53, h=224),
+}
+
+# 去雜點策略（同 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明）：本體單一連通塊的道具用
+# `keep_largest_component`；有分離部件的道具（吊車的吊鉤鏈條、木箱+麻袋組合、花箱花叢、
+# 欄杆扶手柱間隙）用 `remove_small_components` 保留分離部件。
+_SEA_CITY_LARGEST_COMPONENT_PROPS = {"lamppost", "banner", "crate", "barrel", "bollard", "pillar"}
+_SEA_CITY_NEIGHBOR_DEBRIS_MIN_AREA = 80
+
+# 海城道具列畫布背景色（同 `_KINGDOM_PROP_BG_COLOR` 說明，海城畫布顏色略深/略藍，各自取樣）。
+_SEA_CITY_PROP_BG_COLOR = (27, 41, 58)
+
+
+def slice_sea_city_props(sheet: Image) -> dict:
+    """海城道具切圖：與 `slice_kingdom_props` 同一套去背流程（`chroma_key_flood_color`，
+    理由同 `_KINGDOM_PROP_BG_COLOR`），座標表換成 `SEA_CITY_PROP_REGIONS`（`19` §1）。"""
+    out = {}
+    for name, region in SEA_CITY_PROP_REGIONS.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        keyed = chroma_key_flood_color(cropped, _SEA_CITY_PROP_BG_COLOR, threshold=16)
+        if name in _SEA_CITY_LARGEST_COMPONENT_PROPS:
+            # 同 `slice_kingdom_props`：用膨脹連通版避免細長桿狀部件被色距去背攔腰挖空。
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=_SEA_CITY_NEIGHBOR_DEBRIS_MIN_AREA)
         out[name] = autocrop(keyed)
     return out
 
@@ -673,20 +929,25 @@ def main() -> None:
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
 
-    # --- 王國首都地域（`18_STAGE_B_SPEC.md` §1）：獨立素材表 design/kingdom.png ---
+    # --- 王國首都地域（Stage B `18_STAGE_B_SPEC.md` §1 → Stage C `19_STAGE_C_SPEC.md` §1
+    # 重切）：環境（背景+道具）讀新版 design/kingdom.png（更精緻、無角色列）；
+    # NPC 讀救回的舊版 design/kingdom_characters.png（唯一還保留角色列的素材表）。---
     if os.path.exists(KINGDOM_SHEET):
         kingdom_sheet = decode_png(KINGDOM_SHEET)
         print(f"kingdom_sheet: {kingdom_sheet.width}x{kingdom_sheet.height}")
 
         kingdom_bg_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "bg")
         kingdom_layers = (
-            ("far", KINGDOM_BG_FAR, None),
-            ("mid", KINGDOM_BG_MID, KINGDOM_BG_MID_TOP_FADE_PX),
-            ("fore", KINGDOM_BG_FORE, KINGDOM_BG_FORE_TOP_FADE_PX),
-            ("ground", KINGDOM_BG_GROUND, None),
+            ("far", KINGDOM_BG_FAR, None, "far"),
+            ("mid", KINGDOM_BG_MID, KINGDOM_BG_MID_TOP_FADE_PX, "mid"),
+            ("fore", KINGDOM_BG_FORE, KINGDOM_BG_FORE_TOP_FADE_PX, "fore"),
+            ("ground", KINGDOM_BG_GROUND, None, None),
         )
-        for name, region, fade_px in kingdom_layers:
+        for name, region, fade_px, label_key in kingdom_layers:
             img = kingdom_sheet.crop(region.x, region.y, region.w, region.h)
+            if label_key is not None and label_key in KINGDOM_LABEL_BOX_RECTS:
+                # 蓋掉疊在內容左上角的「遠景/中景/前景」標籤黑底方框（見 `patch_label_box` 說明）。
+                img = patch_label_box(img, KINGDOM_LABEL_BOX_RECTS[label_key])
             if fade_px:
                 # mid/fore 疊在後方層之前、上緣重疊，淡出讓接縫變漸層（同 `BG_MID_TOP_FADE_PX` 手法）。
                 img = fade_top_edge(img, fade_px=fade_px)
@@ -700,15 +961,55 @@ def main() -> None:
             out_path = os.path.join(kingdom_props_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {KINGDOM_SHEET} not found, skipping kingdom region bg/props slicing")
 
-        kingdom_npcs = slice_kingdom_npcs(kingdom_sheet)
+    # 王國 NPC 改讀救回的舊版素材表（`19` §1「王國市民 NPC 保留」）：舊版座標可續用
+    # （`KINGDOM_NPC_REGIONS` 未變），只換來源圖檔。
+    if os.path.exists(KINGDOM_CHARACTERS_SHEET):
+        kingdom_characters_sheet = decode_png(KINGDOM_CHARACTERS_SHEET)
+        print(f"kingdom_characters_sheet: {kingdom_characters_sheet.width}x{kingdom_characters_sheet.height}")
+
+        kingdom_npcs = slice_kingdom_npcs(kingdom_characters_sheet)
         kingdom_npc_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "npc")
         for name, img in kingdom_npcs.items():
             out_path = os.path.join(kingdom_npc_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
-        print(f"note: {KINGDOM_SHEET} not found, skipping kingdom region slicing")
+        print(f"note: {KINGDOM_CHARACTERS_SHEET} not found, skipping kingdom NPC slicing")
+
+    # --- 港口海城地域（Stage C `19_STAGE_C_SPEC.md` §1，第三地域）：獨立素材表
+    # design/sea_city.png，無角色列 → 無海城 NPC（本階段）。---
+    if os.path.exists(SEA_CITY_SHEET):
+        sea_city_sheet = decode_png(SEA_CITY_SHEET)
+        print(f"sea_city_sheet: {sea_city_sheet.width}x{sea_city_sheet.height}")
+
+        sea_city_bg_dir = os.path.join(OUT_ROOT, "regions", "sea_city", "bg")
+        sea_city_layers = (
+            ("far", SEA_CITY_BG_FAR, None, "far"),
+            ("mid", SEA_CITY_BG_MID, SEA_CITY_BG_MID_TOP_FADE_PX, "mid"),
+            ("fore", SEA_CITY_BG_FORE, SEA_CITY_BG_FORE_TOP_FADE_PX, "fore"),
+            ("ground", SEA_CITY_BG_GROUND, None, None),
+        )
+        for name, region, fade_px, label_key in sea_city_layers:
+            img = sea_city_sheet.crop(region.x, region.y, region.w, region.h)
+            if label_key is not None and label_key in SEA_CITY_LABEL_BOX_RECTS:
+                img = patch_label_box(img, SEA_CITY_LABEL_BOX_RECTS[label_key])
+            if fade_px:
+                img = fade_top_edge(img, fade_px=fade_px)
+            out_path = os.path.join(sea_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        sea_city_props = slice_sea_city_props(sea_city_sheet)
+        sea_city_props_dir = os.path.join(OUT_ROOT, "regions", "sea_city", "props")
+        for name, img in sea_city_props.items():
+            out_path = os.path.join(sea_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {SEA_CITY_SHEET} not found, skipping sea_city region slicing")
 
 
 def inspect(sheet: Image) -> None:

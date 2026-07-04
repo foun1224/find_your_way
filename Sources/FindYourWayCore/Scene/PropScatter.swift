@@ -38,27 +38,47 @@ public enum PropScatter {
         Slot(baseX: 800, propName: "crate_medium"),
     ]
 
-    /// 王國首都地域槽位表（`18` §1/§3）：道具池換成 `regions/kingdom/props/` 切出的王國道具，
+    /// 王國首都地域槽位表（`18` §1/§3，`19_STAGE_C_SPEC.md` §1 王國環境重切後更新）：
+    /// 道具池換成新版 `design/kingdom.png` 道具列實際切出的王國道具（`regions/kingdom/props/`）。
+    /// 舊版（`bench`/`signpost`/`market_stall`/`statue`/`tree`/`fountain`/`potted_flower`）已隨
+    /// Stage C 重切作廢——新 kingdom.png 的道具列裡沒有這些物件，繼續引用會讀到 Stage B 遺留的
+    /// 舊風格靜態檔案（未隨新素材重切、風格不搭），因此全面換成新素材表實際切出的 10 種道具。
     /// 間距手法同 `slots`（確定性、依 `baseX` 遞增排列，均勻散佈在同一個 `span` 週期內）。
     public static let kingdomSlots: [Slot] = [
         Slot(baseX: 40, propName: "lamppost"),
-        Slot(baseX: 122, propName: "potted_flower"),
-        Slot(baseX: 204, propName: "bench"),
-        Slot(baseX: 286, propName: "signpost"),
-        Slot(baseX: 368, propName: "market_stall"),
-        Slot(baseX: 450, propName: "banner"),
-        Slot(baseX: 532, propName: "crate"),
-        Slot(baseX: 614, propName: "statue"),
-        Slot(baseX: 696, propName: "tree"),
-        Slot(baseX: 778, propName: "fountain"),
-        Slot(baseX: 860, propName: "cart"),
+        Slot(baseX: 122, propName: "planter"),
+        Slot(baseX: 204, propName: "pillar"),
+        Slot(baseX: 286, propName: "fence_low"),
+        Slot(baseX: 368, propName: "banner"),
+        Slot(baseX: 450, propName: "crate"),
+        Slot(baseX: 532, propName: "crate_reinforced"),
+        Slot(baseX: 614, propName: "barrel"),
+        Slot(baseX: 696, propName: "fence"),
+        Slot(baseX: 778, propName: "cart"),
     ]
 
-    /// 依地域挑選道具槽位表（`18` §3「道具 scatter 依當前地域選該地域的道具池」）。
+    /// 港口海城地域槽位表（`19_STAGE_C_SPEC.md` §1/§3，第三地域）：道具池換成
+    /// `regions/sea_city/props/` 切出的海城道具（含碼頭特有的繫纜柱/吊車），
+    /// 間距手法同 `slots`/`kingdomSlots`（確定性、依 `baseX` 遞增排列）。
+    public static let seaCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "lamppost"),
+        Slot(baseX: 110, propName: "bollard"),
+        Slot(baseX: 190, propName: "banner"),
+        Slot(baseX: 280, propName: "crate"),
+        Slot(baseX: 360, propName: "barrel"),
+        Slot(baseX: 440, propName: "crane"),
+        Slot(baseX: 540, propName: "crate_sack"),
+        Slot(baseX: 630, propName: "planter"),
+        Slot(baseX: 710, propName: "fence"),
+        Slot(baseX: 800, propName: "pillar"),
+    ]
+
+    /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
         case .kingdom: return kingdomSlots
+        case .seaCity: return seaCitySlots
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return slots
         }
     }
