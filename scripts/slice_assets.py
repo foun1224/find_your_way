@@ -932,6 +932,46 @@ def fade_top_edge(img: Image, fade_px: int) -> Image:
     return out
 
 
+def make_horizontally_seamless(img: Image, blend_px: int = 64) -> Image:
+    """把 `img` 左右緣做水平 cross-fade，讓「右緣接左緣」時無跳變，可真無縫橫向平鋪
+    （`ParallaxBackground.buildLayer` 用 `WorldScroll.panoramaTileXs` 把同一張圖一張接一張
+    左右排列，接縫正是「這張的右緣」貼著「下一張（同一張圖）的左緣」）。
+
+    治本保險（取代先前撤掉的「奇數 tile 鏡像平鋪」ABAB 手法——那會讓遠景左右對稱鏡射，
+    使用者要真無縫、不鏡射）：即使來源美術（ChatGPT 生成）左右緣像素本身有落差，也能靠
+    這裡的後製羽化消除接縫，不必依賴生成端完美對齊、也不必犧牲畫面不對稱性。
+
+    作法：取最右 `blend_px` 寬直條與最左 `blend_px` 寬直條，對每一欄做線性 alpha 混合——
+    最右緣（欄 `width-1`）幾乎全採「最左欄」內容，越往左（往 `width-1-blend_px` 方向）越多
+    採原本右緣內容，在 `width-1-blend_px` 處恢復成幾乎全原圖。這樣「右緣」的內容被漸變成
+    「左緣」的內容，橫向重複貼圖時右緣視覺上等於左緣，接縫消失；只動右緣一側的一條窄帶，
+    左緣本身完全不動、不影響圖的其餘畫面。
+    """
+    blend_px = min(blend_px, img.width // 2) if img.width > 1 else 0
+    if blend_px <= 0:
+        return img
+
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    width = img.width
+    for y in range(img.height):
+        for d in range(blend_px):
+            # `d` = 離右緣的距離：d=0 是最右緣一欄（x=width-1），越大越往內。
+            # 配對的「左緣欄」用同樣的距離 `d`（即 `img[d]`）——這樣 x=width-1 配 `img[0]`、
+            # x=width-2 配 `img[1]`……使兩者的「距各自邊緣的距離」相等，横向拼接時邊緣
+            # 兩側的漸變坡度對稱、平滑；`t` 在 d=0 時幾乎全採左緣內容（讓 x=width-1 實質上
+            # 等於 `img[0]`，銜接下一張貼圖的左緣時完全連續），隨 `d` 增大線性收斂回原圖。
+            x = width - 1 - d
+            t = 1.0 - d / blend_px  # d=0 → t≈1（幾乎全左緣）；d=blend_px-1 → t 趨近 0（幾乎全原圖）。
+            right_px = img.pixels[y][x]
+            left_px = img.pixels[y][d]
+            blended = tuple(
+                int(round(right_px[c] * (1 - t) + left_px[c] * t))
+                for c in range(4)
+            )
+            out.pixels[y][x] = blended
+    return out
+
+
 def _apply_exclude_rects(img: Image, rects: list) -> Image:
     out = Image(img.width, img.height, [row[:] for row in img.pixels])
     for rect in rects:
@@ -1368,6 +1408,9 @@ def slice_harbor_bg(sheet: Image) -> dict:
     docstring 動機）。回傳 `{layer_name: Image}`。
     """
     far = patch_label_box(sheet.crop(HARBOR_BG_FAR.x, HARBOR_BG_FAR.y, HARBOR_BG_FAR.w, HARBOR_BG_FAR.h), HARBOR_LABEL_RECT)
+    # 遠景 backdrop 是唯一會被無限橫向平鋪的 layered 底圖（`18`/`20` §8A）：左右緣羽化交融，
+    # 讓生成端即使沒有完美對齊也能真無縫 loop、不必鏡射（見 `make_horizontally_seamless` docstring）。
+    far = make_horizontally_seamless(far, blend_px=64)
 
     mid_raw = sheet.crop(HARBOR_BG_MID.x, HARBOR_BG_MID.y, HARBOR_BG_MID.w, HARBOR_BG_MID.h)
     mid_raw = patch_label_box(mid_raw, HARBOR_LABEL_RECT)
