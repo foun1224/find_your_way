@@ -47,8 +47,14 @@
 - [ ] 微互動（點擊回應等，依 OQ-3）
 - [ ] 美術從像素方格升級為正式像素美術
 
-## Phase 5 — 打包與長駐 (Ship & Live)
-- [ ] 開機自啟、選單列常駐、偏好設定
-- [ ] 打包與簽章（App Bundle）
+## Phase 5 — 打包與長駐 (Ship & Live) ✅ 程式碼完成（126/126 綠，待安裝驗收）
+- [x] 開機自啟（SMAppService）、選單列狀態卡片、偏好設定視窗（SwiftUI）
+- [x] 打包與 ad-hoc 簽章（build_app.sh SIGN_MODE=adhoc，codesign 驗過）
+- 待使用者：裝進 /Applications → 首次開啟 → 開自啟 → **重開機驗 R1**（安裝指南 `11_INSTALL_GUIDE.md`）
 
 > 各 Phase 進入前，先補齊該 Phase 的細部規格文件。
+
+---
+
+## 里程碑：Phase 0–3 + 5 完成（僅 Phase 4 質感/正式美術待做）
+核心陪伴循環 + 可安裝常駐皆成立，佔位美術。剩 Phase 4（正式像素美術/晝夜/天氣/點角色微互動）——需美術路線決策。

@@ -49,7 +49,12 @@
 - **使用者拍板簽章＝ad-hoc 自用不公證**（ADR-008 更新）。
 - Fable review 通過 `10` 規格、§10 待決全定案（ad-hoc/佔位icon/狀態卡三行/純AppKit/不記位置/不放音量）。
 - **R1（ad-hoc × SMAppService 自啟）最高驗證**；fallback：自啟卡關→系統設定手動加登入項，不阻擋其餘交付。
-- 委派 Sonnet 實作 Phase 5（偏好資料層 TDD/狀態卡片/偏好視窗 SwiftUI/LoginItemService/螢幕重錨定/打包 SIGN_MODE=adhoc）。施工中。
+- 委派 Sonnet 實作 Phase 5（偏好資料層 TDD/狀態卡片/偏好視窗 SwiftUI/LoginItemService/螢幕重錨定/打包 SIGN_MODE=adhoc）。
+- **完成並提交（94284ac）**：Fable 獨立驗證 126/126 綠、親自打包驗 **ad-hoc 簽章通過**（codesign --verify --deep --strict）、讀核心（StatusCardText 克制無裸數字、LoginItemService status 真相來源）皆正確。Sonnet 未 live 呼叫 register()（不動使用者登入項，判斷正確）。
+- 寫 `11_INSTALL_GUIDE.md` 安裝驗收指南。**待使用者：build_app.sh → /Applications → 首次開啟 → 開自啟 → 重開機驗 R1**（fallback：系統設定手動加登入項）。
+
+**Phase 5 ✅ 程式碼完成。專案：Phase 0–3 + 5 全部完成（佔位美術），可安裝常駐。僅 Phase 4（質感/正式美術）待做。**
+**git**：e9f348e/faf940a/a8bddea/963f3f1/29edeb1/94284ac。
 
 ---
 
