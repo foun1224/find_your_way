@@ -55,10 +55,30 @@ public final class CharacterNode: SKSpriteNode {
     /// 與「靠近感應」共用。找不到時（素材尚未切出）優雅降級為「不做轉身，只停頓」。
     private var frontTextures: [SKTexture] = []
 
+    /// Reduce-motion 開關（由 `GameScene.motionEnabled` 反向驅動，`03` §1.5 / WCAG 2.3.3）：
+    /// `true` 時停用**連續、無資訊內容的位移/縮放**裝飾動畫（呼吸 loop、暖心回應的跳動+縮放）——
+    /// 這類動畫永遠在跑或可重複觸發，等同高頻率動態，對前庭敏感使用者是持續負擔。
+    /// **不歸零**：`playRestLookAtViewer`／靠近感應的轉身用 alpha 淡入淡出（非位移/縮放），
+    /// 暖心回應的暖光用 alpha 淡入淡出，兩者皆保留——符合「降低動態＝更少更柔，非全部拿掉，
+    /// 保留有助理解的 opacity/color 過場、拿掉位移類動態」的準則。
+    public var reducedMotion: Bool {
+        didSet {
+            guard reducedMotion != oldValue else { return }
+            if reducedMotion {
+                removeAction(forKey: Self.breathingKey)
+                setScale(1.0)
+            } else if action(forKey: Self.breathingKey) == nil {
+                runBreathing()
+            }
+        }
+    }
+
     /// - Parameters:
     ///   - screenX: 固定的螢幕水平位置（ADR-009：畫面左側約 20–25%，由 `WorldScroll.characterScreenX` 算出）。
     ///   - screenY: 固定的螢幕垂直位置（角色腳邊，通常對齊地面平台頂線）。
-    public init(screenX: Double, screenY: Double) {
+    ///   - reducedMotion: 建立當下的 reduce-motion 狀態（見上方屬性說明）。
+    public init(screenX: Double, screenY: Double, reducedMotion: Bool = false) {
+        self.reducedMotion = reducedMotion
         let textures = ArtCatalog.sequentialTextures(directory: "char_hero", prefix: "right_")
 
         if let first = textures.first {
@@ -70,7 +90,9 @@ public final class CharacterNode: SKSpriteNode {
             self.rightTextures = textures
             self.frontTextures = ArtCatalog.sequentialTextures(directory: "char_hero", prefix: "front_")
             runWalkAnimation(textures: textures)
-            runBreathing()
+            if !reducedMotion {
+                runBreathing()
+            }
         } else {
             // 優雅降級：找不到切好的美術（例如尚未執行 `scripts/slice_assets.py`）。
             super.init(
@@ -194,6 +216,13 @@ public final class CharacterNode: SKSpriteNode {
     /// 負責防連點節流；本方法本身也會擋掉「動作還在播放中」的重疊觸發，避免洗版式抖動。
     public func playWarmResponse() {
         guard action(forKey: Self.warmResponseKey) == nil else { return }
+
+        guard !reducedMotion else {
+            // Reduce-motion：拿掉跳動（位移）與放大再收（縮放），只留暖光的 alpha 淡入淡出——
+            // 仍然給「聽到你點擊了」的回饋（Standard 1 valid purpose），但不含位移/縮放動態。
+            playWarmGlow()
+            return
+        }
 
         let hopUp = SKAction.moveBy(x: 0, y: 5, duration: 0.3)
         hopUp.timingMode = .easeOut

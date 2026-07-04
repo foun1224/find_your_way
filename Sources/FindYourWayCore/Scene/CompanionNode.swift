@@ -25,10 +25,27 @@ public final class CompanionNode: SKSpriteNode {
     /// 找不到美術時的佔位色塊邊長（沿用 Phase 3 尺寸）。
     private static let fallbackSize: CGFloat = 26
 
+    /// Reduce-motion 開關（由 `GameScene.motionEnabled` 反向驅動，`03` §1.5 / WCAG 2.3.3）：
+    /// `true` 時停用「偶爾看向主角」的縮放 loop（會無限期重複觸發，等同高頻率連續動態）。
+    /// 走路 texture 循環本身不受影響（那是必要的狀態表現，不是裝飾性位移/縮放）。
+    public var reducedMotion: Bool {
+        didSet {
+            guard reducedMotion != oldValue else { return }
+            if reducedMotion {
+                removeAction(forKey: "lookOver")
+                setScale(1.0)
+            } else if action(forKey: "lookOver") == nil {
+                runOccasionalLookAtCompanion()
+            }
+        }
+    }
+
     /// - Parameters:
     ///   - screenX: 固定的螢幕水平位置（略後於主角，由呼叫端依 `WorldScroll` 算出）。
     ///   - screenY: 固定的螢幕垂直位置（略低於主角，構圖主從）。
-    public init(screenX: Double, screenY: Double) {
+    ///   - reducedMotion: 建立當下的 reduce-motion 狀態（見上方屬性說明）。
+    public init(screenX: Double, screenY: Double, reducedMotion: Bool = false) {
+        self.reducedMotion = reducedMotion
         let textures = ArtCatalog.sequentialTextures(directory: "char_companion", prefix: "right_")
 
         if let first = textures.first {
@@ -52,7 +69,9 @@ public final class CompanionNode: SKSpriteNode {
             self.alpha = 0.7
         }
 
-        runOccasionalLookAtCompanion()
+        if !reducedMotion {
+            runOccasionalLookAtCompanion()
+        }
     }
 
     public required init?(coder aDecoder: NSCoder) {
@@ -74,8 +93,12 @@ public final class CompanionNode: SKSpriteNode {
     private func runOccasionalLookAtCompanion() {
         let pause = SKAction.wait(forDuration: 8, withRange: 6)
         let hold = SKAction.run { [weak self] in
-            self?.run(SKAction.scale(to: 1.03, duration: 0.6)) {
-                self?.run(SKAction.scale(to: 1.0, duration: 0.6))
+            let grow = SKAction.scale(to: 1.03, duration: 0.6)
+            grow.timingMode = .easeInEaseOut
+            self?.run(grow) {
+                let shrink = SKAction.scale(to: 1.0, duration: 0.6)
+                shrink.timingMode = .easeInEaseOut
+                self?.run(shrink)
             }
         }
         run(SKAction.repeatForever(SKAction.sequence([pause, hold])), withKey: "lookOver")

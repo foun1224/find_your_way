@@ -94,9 +94,19 @@ public final class GameScene: SKScene {
     /// 每次 tick 推進後呼叫，供 executable 層節流存檔（`08` §3.6 存檔時機）。
     public var onStateChanged: ((GameState) -> Void)?
 
-    /// reduce-motion 消費檢查點（`10` §4.3 / §9.2 步驟 7）：`false` 時應關閉晝夜 tint 漸變與粒子。
-    /// Phase 5 尚無晝夜/粒子渲染（Phase 4 功能），此旗標先接好、供 Phase 4 上線時消費。
-    public var motionEnabled: Bool = true
+    /// reduce-motion 消費檢查點（`10` §4.3 / §9.2 步驟 7）：`false` 時關閉晝夜 tint 漸變、粒子，
+    /// 以及角色/旅伴的裝飾性位移/縮放微行為（呼吸、暖心回應的跳動、旅伴偶爾看你的縮放）與
+    /// 世界捲動補間（離線回歸/偶爾看你結束後的追趕，見 `presentReturnCatchUp`/`catchUpDisplayedDistance`）
+    /// ——這些連續橫向捲動對前庭敏感使用者是典型的暈動誘因，reduce motion 時改為瞬間到位
+    /// （`03` §1.5、WCAG 2.3.3）。角色的「看你」轉身（alpha 淡入淡出、無位移）與旅程日誌 toast
+    /// （純 alpha 淡入淡出）不受影響——它們本就只用 opacity，符合「降低動態保留 opacity 過場」準則。
+    public var motionEnabled: Bool = true {
+        didSet {
+            guard motionEnabled != oldValue else { return }
+            character?.reducedMotion = !motionEnabled
+            companion?.reducedMotion = !motionEnabled
+        }
+    }
 
     /// - Parameters:
     ///   - initialState: 啟動時（已完成離線結算的）狀態。
@@ -148,7 +158,7 @@ public final class GameScene: SKScene {
         // 讓角色（anchorPoint 腳邊）看起來站在地面上，而非懸空/陷入。
         let screenX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
         let screenY = Double(ParallaxBackground.groundDisplayHeight)
-        let node = CharacterNode(screenX: screenX, screenY: screenY)
+        let node = CharacterNode(screenX: screenX, screenY: screenY, reducedMotion: !motionEnabled)
         node.zPosition = 10
         addChild(node)
         character = node
@@ -590,6 +600,14 @@ public final class GameScene: SKScene {
         let target = gameState.distance
         guard target != start else { return }
 
+        guard motionEnabled else {
+            // Reduce-motion：跳過捲動補間，直接對齊（`03` §1.5）——持續的橫向世界捲動是
+            // 典型的暈動誘因，不該在前庭敏感使用者身上播放，即使追趕量本身很小。
+            displayedDistance = target
+            applyWorldScroll(distance: target)
+            return
+        }
+
         let duration = HeroRestSchedule.catchUpDurationSeconds
         let catchUp = SKAction.customAction(withDuration: duration) { [weak self] _, elapsed in
             guard let self else { return }
@@ -727,14 +745,24 @@ public final class GameScene: SKScene {
         displayedDistance = startDistance
         applyWorldScroll(distance: displayedDistance)
 
-        let catchUpDuration: TimeInterval = 2.5
-        let catchUp = SKAction.customAction(withDuration: catchUpDuration) { [weak self] _, elapsed in
-            guard let self else { return }
-            let progress = min(1.0, Double(elapsed) / catchUpDuration)
-            self.displayedDistance = startDistance + outcome.distanceGained * progress
-            self.applyWorldScroll(distance: self.displayedDistance)
+        if motionEnabled {
+            let catchUpDuration: TimeInterval = 2.5
+            let catchUp = SKAction.customAction(withDuration: catchUpDuration) { [weak self] _, elapsed in
+                guard let self else { return }
+                let progress = min(1.0, Double(elapsed) / catchUpDuration)
+                self.displayedDistance = startDistance + outcome.distanceGained * progress
+                self.applyWorldScroll(distance: self.displayedDistance)
+            }
+            // 修正遺漏：`catchUpDisplayedDistance`（同檔案）的等價補間有明確設 `.easeInEaseOut`
+            // 呼應「有機 Organic」（`03` §3.4：避免機械等速），這裡先前漏設、以固定速度捲動；
+            // 補上讓兩處世界捲動補間的手感一致。
+            catchUp.timingMode = .easeInEaseOut
+            run(catchUp)
+        } else {
+            // Reduce-motion：跳過捲動補間，直接對齊（`03` §1.5），理由同 `catchUpDisplayedDistance`。
+            displayedDistance = gameState.distance
+            applyWorldScroll(distance: displayedDistance)
         }
-        run(catchUp)
 
         // 逐行呈現：地標/一般旅程 → 里程事件 → 章節轉場 → 旅伴相遇（peak，若有），
         // 彼此錯開，避免同時彈出一堆訊息（洗版）。
@@ -823,12 +851,23 @@ public final class GameScene: SKScene {
         let anchorX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
         let screenY = Double(size.height) * 0.25
         // 略後於主角（構圖主從：主角最前最亮，旅伴略小/略後/明度略降）。
-        let node = CompanionNode(screenX: anchorX - 34, screenY: screenY - 4)
+        let node = CompanionNode(screenX: anchorX - 34, screenY: screenY - 4, reducedMotion: !motionEnabled)
         node.zPosition = 9 // 低於主角的 10。
         addChild(node)
         companion = node
 
         guard animateIn else { return }
+
+        guard motionEnabled else {
+            // Reduce-motion：旅伴相遇仍是一次真實的里程碑（`GameState.companionJoined`），必須
+            // 讓使用者看得到「發生了」，但拿掉縮放/光暈位移——只留 opacity 淡入到常態
+            // （`CompanionNode` 的 `alpha = 0.92`），符合「保留 opacity、拿掉位移/縮放」準則。
+            node.alpha = 0
+            let fadeIn = SKAction.fadeAlpha(to: 0.92, duration: 1.2)
+            fadeIn.timingMode = .easeOut
+            node.run(fadeIn)
+            return
+        }
 
         // 暖陽金光暈：溫暖「亮起來」而非「爆一下」——慢放大、數秒即散，無 overshoot/彈跳/震動（`03` §3.4）。
         let glow = SKShapeNode(circleOfRadius: CompanionNode.size)
