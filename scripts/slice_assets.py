@@ -257,6 +257,33 @@ class Region:
 HERO_RIGHT_ROW = Region(x=95, y=42, w=390, h=90)
 HERO_RIGHT_FRAME_COUNT = 5
 
+# 旅伴（藍衫紅披風）「向右」列：與主角同一 y 帶（同一排「向右」），x 落在主角區塊之後、
+# 道具區塊之前；4 格（旅伴只有 4 走路 frame，主角 5 格）。目視校準見 Phase 4b 校準紀錄。
+COMPANION_RIGHT_ROW = Region(x=650, y=42, w=320, h=90)
+COMPANION_RIGHT_FRAME_COUNT = 4
+
+# 道具／互動物件（Phase 4b `12_PHASE4_SPEC.md` §1/§6）：素材表右上角三排。
+# 每個道具各自獨立裁切區（而非整排切格）——因為道具尺寸/間距不一（不像角色走路 frame 等寬等距），
+# 逐一目視校準座標，範圍刻意留一點餘裕，去背 + autocrop 後會收斂到道具本身的精確 bounding box；
+# 餘裕只要不切進「相鄰道具」即可，不需要對到道具本身邊緣的像素級精準。
+PROP_REGIONS: dict = {
+    "crate_large": Region(x=1010, y=60, w=95, h=100),
+    "crate_medium": Region(x=1108, y=60, w=58, h=100),
+    "crate_small": Region(x=1168, y=60, w=55, h=100),
+    "barrel_small": Region(x=1228, y=60, w=52, h=100),
+    "signpost": Region(x=1298, y=55, w=60, h=105),
+    "lantern": Region(x=1358, y=50, w=80, h=110),
+    "barrel_large": Region(x=1012, y=160, w=90, h=105),
+    "fence": Region(x=1100, y=165, w=146, h=100),
+    "haystack": Region(x=1252, y=150, w=98, h=120),
+    "haycart": Region(x=1350, y=150, w=186, h=130),
+    "flower": Region(x=995, y=268, w=105, h=120),
+    "rock": Region(x=1130, y=275, w=90, h=110),
+    "bush": Region(x=1225, y=275, w=100, h=110),
+    "grass": Region(x=1330, y=275, w=70, h=110),
+    "arrow_sign": Region(x=1400, y=285, w=120, h=105),
+}
+
 # 背景 panorama：左側「遠景/中景/近景/地面平台」中文標籤欄，內容區從 x=95 到 x=1525
 # （用逐像素亮度掃描找到左右內容邊界，兩側外面是畫布留白/標籤底的近黑色 #1B1B1B）。
 # y 範圍同樣以逐像素掃描找到分區間的清楚亮度斷點（見 `--inspect` 校準過程）：
@@ -269,16 +296,41 @@ BG_MID = Region(x=95, y=637, w=1431, h=136)
 BG_GROUND = Region(x=95, y=915, w=1431, h=73)
 
 
-def slice_hero_right(sheet: Image) -> list:
-    row_img = sheet.crop(HERO_RIGHT_ROW.x, HERO_RIGHT_ROW.y, HERO_RIGHT_ROW.w, HERO_RIGHT_ROW.h)
+def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
+    """依 `region` 裁出一整排走路 frame、去背，再依透明間隙切成 `frame_count` 格並各自 autocrop。
+    共用邏輯，供主角/旅伴兩排走路動畫共用（`12` §1）。
+    """
+    row_img = sheet.crop(region.x, region.y, region.w, region.h)
     keyed = chroma_key_flood(row_img, threshold=28)
-    segments = segment_row_by_gaps(keyed, HERO_RIGHT_FRAME_COUNT)
+    segments = segment_row_by_gaps(keyed, frame_count)
     frames = []
     for (sx, sw) in segments:
         frame = keyed.crop(sx, 0, sw, keyed.height)
         frame = autocrop(frame)
         frames.append(frame)
     return frames
+
+
+def slice_hero_right(sheet: Image) -> list:
+    return slice_walk_row(sheet, HERO_RIGHT_ROW, HERO_RIGHT_FRAME_COUNT)
+
+
+def slice_companion_right(sheet: Image) -> list:
+    return slice_walk_row(sheet, COMPANION_RIGHT_ROW, COMPANION_RIGHT_FRAME_COUNT)
+
+
+def slice_props(sheet: Image) -> dict:
+    """逐一裁切 `PROP_REGIONS` 各道具：裁切區域 → 去背 → autocrop。
+    每個道具獨立裁切（而非整排切格），因為道具尺寸/間距不一（`12` §1 / Phase 4b 校準）。
+    """
+    out = {}
+    for name, region in PROP_REGIONS.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        keyed = chroma_key_flood(cropped, threshold=28)
+        out[name] = autocrop(keyed)
+    return out
 
 
 def pad_to_common_size(frames: list) -> list:
@@ -325,6 +377,23 @@ def main() -> None:
         out_path = os.path.join(char_dir, f"right_{i}.png")
         encode_png(frame, out_path)
         print(f"wrote {out_path} ({frame.width}x{frame.height})")
+
+    # --- 旅伴向右走路 frame（Phase 4b）---
+    companion_frames = slice_companion_right(sheet)
+    companion_frames = pad_to_common_size(companion_frames)
+    companion_dir = os.path.join(OUT_ROOT, "char_companion")
+    for i, frame in enumerate(companion_frames):
+        out_path = os.path.join(companion_dir, f"right_{i}.png")
+        encode_png(frame, out_path)
+        print(f"wrote {out_path} ({frame.width}x{frame.height})")
+
+    # --- 道具／互動物件（Phase 4b）---
+    props = slice_props(sheet)
+    props_dir = os.path.join(OUT_ROOT, "props")
+    for name, img in props.items():
+        out_path = os.path.join(props_dir, f"{name}.png")
+        encode_png(img, out_path)
+        print(f"wrote {out_path} ({img.width}x{img.height})")
 
 
 def inspect(sheet: Image) -> None:

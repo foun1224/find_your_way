@@ -11,6 +11,8 @@ public final class GameScene: SKScene {
     private var companion: CompanionNode?
     private var sceneryLayers: [ParallaxBackground.SceneryLayer] = []
     private var landmarkNodes: [String: SKNode] = [:]
+    /// 近景散落道具（Phase 4b `12` §2/§6）：純裝飾、不入 `GameState`，位置由 `PropScatter` 純函式決定。
+    private var propNodes: [(node: SKSpriteNode, slot: PropScatter.Slot)] = []
 
     private var lastUpdateTime: TimeInterval?
     private var timeSinceLastTick: Double = 0
@@ -81,6 +83,7 @@ public final class GameScene: SKScene {
         character = node
 
         buildLandmarkNodes()
+        buildPropNodes()
         applyWorldScroll(distance: displayedDistance)
 
         // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
@@ -89,15 +92,55 @@ public final class GameScene: SKScene {
         }
     }
 
+    /// 地標視覺（Phase 4b `12` §2/§6）：一支路標 sprite（`props/signpost.png`）+ 小字名稱。
+    /// 找不到美術時優雅降級為 Phase 3 的純文字「◆ 名稱」（不 crash）。
     private func buildLandmarkNodes() {
+        let signpostHeight: CGFloat = 46
+        let signpostTexture = ArtCatalog.texture(relativePath: "props/signpost.png")
+
         for landmark in Landmark.all {
-            let marker = SKLabelNode(text: "◆ \(landmark.name)")
-            marker.fontSize = 12
-            marker.fontColor = Palette.travelerTerracotta.skColor
-            marker.zPosition = 5
-            marker.position.y = Double(size.height) * 0.28
-            addChild(marker)
-            landmarkNodes[landmark.id] = marker
+            let container = SKNode()
+            container.zPosition = 5
+            container.position.y = Double(ParallaxBackground.groundDisplayHeight)
+
+            if let texture = signpostTexture {
+                let aspect = texture.size().width / texture.size().height
+                let sprite = SKSpriteNode(texture: texture)
+                sprite.size = CGSize(width: signpostHeight * aspect, height: signpostHeight)
+                sprite.anchorPoint = CGPoint(x: 0.5, y: 0)
+                container.addChild(sprite)
+
+                let label = SKLabelNode(text: landmark.name)
+                label.fontSize = 10
+                label.fontColor = Palette.travelerTerracotta.skColor
+                label.position = CGPoint(x: 0, y: Double(signpostHeight) + 6)
+                container.addChild(label)
+            } else {
+                let marker = SKLabelNode(text: "◆ \(landmark.name)")
+                marker.fontSize = 12
+                marker.fontColor = Palette.travelerTerracotta.skColor
+                container.addChild(marker)
+            }
+
+            addChild(container)
+            landmarkNodes[landmark.id] = container
+        }
+    }
+
+    /// 近景散落道具（Phase 4b `12` §2/§6）：純裝飾，位置由 `PropScatter`（純函式，`08`/`12` 同一套
+    /// wrap 邏輯）決定，依 distance 捲動；找不到某道具美術時該槽位就不放（優雅降級，不 crash）。
+    private func buildPropNodes() {
+        let displayHeight: CGFloat = 34
+        for slot in PropScatter.slots {
+            guard let texture = ArtCatalog.texture(relativePath: "props/\(slot.propName).png") else { continue }
+            let aspect = texture.size().width / texture.size().height
+            let node = SKSpriteNode(texture: texture)
+            node.size = CGSize(width: displayHeight * aspect, height: displayHeight)
+            node.anchorPoint = CGPoint(x: 0.5, y: 0)
+            node.position.y = Double(ParallaxBackground.groundDisplayHeight)
+            node.zPosition = -1 // 地面之前、角色/旅伴之後（近景裝飾，`12` §2）。
+            addChild(node)
+            propNodes.append((node: node, slot: slot))
         }
     }
 
@@ -198,6 +241,10 @@ public final class GameScene: SKScene {
                 characterAnchorX: anchorX
             )
             node.position.x = CGFloat(x)
+        }
+
+        for (node, slot) in propNodes {
+            node.position.x = CGFloat(PropScatter.screenX(for: slot, distance: distance))
         }
     }
 
