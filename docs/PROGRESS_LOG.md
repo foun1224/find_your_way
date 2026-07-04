@@ -42,6 +42,17 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 4a 完成（像素美術整合）
+
+- 使用者用 ChatGPT 產出像素素材表（兩角色4向走路+道具+分層背景，側面橫向捲軸）。
+- Sonnet 建 slice_assets.py（純標準庫切圖/去背）+ ArtCatalog + 整合背景三層 + 主角走路 5 幀。
+- **Fable 抓渲染 bug**：背景全黑 → 定位為 panorama 誤用 wrappedX scatter（distance>0 時整片露空透出深色桌面）→ 委派修為 WorldScroll.panoramaTileXs 無縫平鋪 + 5 條覆蓋迴歸測試。
+- **Fable 親自 build+截圖驗收通過**：遠山城堡/中景村莊教堂/地面三層視差 + 金髮旅人走動，含 distance>0 正常。131/131 綠。提交 710f5e5。
+- **已知小瑕疵（留 polish）**：遠景/中景兩條 panorama 交界有一條淡水平接縫（各為獨立小場景非無縫延伸），4b/polish 再處理。
+- **剩餘 Phase 4**：4b 旅伴 sprite + 道具/地標視覺；4c 晝夜光影 + 天氣；4d 點角色微互動。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 5 啟動（使用者選擇先出貨）
 
 使用者看完 Phase 4/5 細節後選 **Phase 5 先出貨**（無美術新變數、可立即動工，裝起來日常用幾天再帶手感做 Phase 4）。
