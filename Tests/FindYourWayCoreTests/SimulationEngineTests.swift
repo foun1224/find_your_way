@@ -7,20 +7,20 @@ final class SimulationEngineTests: XCTestCase {
 
     func testAdvanceIncreasesDistanceByRulesFormula() {
         let state = GameState(distance: 100)
-        let (newState, _) = SimulationEngine.advance(state, bySeconds: 10, rules: rules)
+        let (newState, _, _, _) = SimulationEngine.advance(state, bySeconds: 10, rules: rules)
         XCTAssertEqual(newState.distance, 100 + rules.distanceGained(overSeconds: 10), accuracy: 0.0001)
     }
 
     func testZeroDtDoesNotChangeState() {
         let state = GameState(distance: 42, landmarksPassed: ["x"], growth: 5)
-        let (newState, crossed) = SimulationEngine.advance(state, bySeconds: 0, rules: rules)
+        let (newState, crossed, _, _) = SimulationEngine.advance(state, bySeconds: 0, rules: rules)
         XCTAssertEqual(newState, state)
         XCTAssertTrue(crossed.isEmpty)
     }
 
     func testNegativeDtDoesNotChangeState() {
         let state = GameState(distance: 42)
-        let (newState, crossed) = SimulationEngine.advance(state, bySeconds: -5, rules: rules)
+        let (newState, crossed, _, _) = SimulationEngine.advance(state, bySeconds: -5, rules: rules)
         XCTAssertEqual(newState, state)
         XCTAssertTrue(crossed.isEmpty)
     }
@@ -31,7 +31,7 @@ final class SimulationEngineTests: XCTestCase {
         let secondsToCross = (firstLandmark.distance + 1) / rules.speed
         let state = GameState(distance: 0)
 
-        let (newState, crossed) = SimulationEngine.advance(state, bySeconds: secondsToCross, rules: rules)
+        let (newState, crossed, _, _) = SimulationEngine.advance(state, bySeconds: secondsToCross, rules: rules)
 
         XCTAssertEqual(crossed.map(\.id), [firstLandmark.id])
         XCTAssertEqual(newState.landmarksPassed, [firstLandmark.id])
@@ -42,7 +42,7 @@ final class SimulationEngineTests: XCTestCase {
         var state = GameState(distance: firstLandmark.distance + 10)
         state.landmarksPassed = [firstLandmark.id]
 
-        let (newState, crossed) = SimulationEngine.advance(state, bySeconds: 1, rules: rules)
+        let (newState, crossed, _, _) = SimulationEngine.advance(state, bySeconds: 1, rules: rules)
 
         XCTAssertTrue(crossed.isEmpty)
         XCTAssertEqual(newState.landmarksPassed, [firstLandmark.id])
@@ -54,7 +54,7 @@ final class SimulationEngineTests: XCTestCase {
         let secondsToCrossBoth = (second.distance + 1) / rules.speed
         let state = GameState(distance: 0)
 
-        let (newState, crossed) = SimulationEngine.advance(state, bySeconds: secondsToCrossBoth, rules: rules)
+        let (newState, crossed, _, _) = SimulationEngine.advance(state, bySeconds: secondsToCrossBoth, rules: rules)
 
         XCTAssertEqual(crossed.map(\.id), [first.id, second.id])
         XCTAssertEqual(newState.landmarksPassed, [first.id, second.id])
@@ -64,10 +64,10 @@ final class SimulationEngineTests: XCTestCase {
         let state = GameState(distance: 0)
         var accumulated = state
         for _ in 0..<10 {
-            let (next, _) = SimulationEngine.advance(accumulated, bySeconds: 100, rules: rules)
+            let (next, _, _, _) = SimulationEngine.advance(accumulated, bySeconds: 100, rules: rules)
             accumulated = next
         }
-        let (single, _) = SimulationEngine.advance(state, bySeconds: 1000, rules: rules)
+        let (single, _, _, _) = SimulationEngine.advance(state, bySeconds: 1000, rules: rules)
         XCTAssertEqual(accumulated.distance, single.distance, accuracy: 0.0001)
     }
 
@@ -77,7 +77,7 @@ final class SimulationEngineTests: XCTestCase {
         var previousLandmarkCount = state.landmarksPassed.count
 
         for _ in 0..<50 {
-            let (next, _) = SimulationEngine.advance(state, bySeconds: 500, rules: rules)
+            let (next, _, _, _) = SimulationEngine.advance(state, bySeconds: 500, rules: rules)
             XCTAssertGreaterThanOrEqual(next.distance, previousDistance)
             XCTAssertGreaterThanOrEqual(next.landmarksPassed.count, previousLandmarkCount)
             previousDistance = next.distance
@@ -88,7 +88,7 @@ final class SimulationEngineTests: XCTestCase {
 
     func testAdvanceDoesNotUpdateTimestamp() {
         let state = GameState(distance: 0, lastActiveTimestamp: 12345)
-        let (newState, _) = SimulationEngine.advance(state, bySeconds: 100, rules: rules)
+        let (newState, _, _, _) = SimulationEngine.advance(state, bySeconds: 100, rules: rules)
         XCTAssertEqual(newState.lastActiveTimestamp, 12345)
     }
 }

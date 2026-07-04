@@ -42,6 +42,16 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 3 實作交付 + Fable review
+
+**Sonnet 交付 Phase 3**：JourneyEvent(5事件)/Companion(meetDistance 237600)/GrowthStage/GameState 擴充/SimulationEngine.advance 4-tuple/OfflineProgress 事件補算/schema 1→2/CompanionNode/相遇 peak 呈現。`swift test` **97/97 綠**（+34）。
+
+**Fable review**（獨立 build+97 綠，讀核心）：
+- ✅ **T8 離線事件靈魂測試紮實**：線上逐tick(37s抖動) vs 一次settle 事件序列相等（迴歸鎖）、無 now-seed（不同牆鐘同結果）、wasCapped 用慢速rules讓cap落事件表中間、驗證超出事件此次不出現且繼續走終會遇到（紅線二）。Companion 純函式單調正確。
+- 🔧 **送修 2 點**（Sonnet 誠實 flag）：(1) schemaVersion 永停 1＝欄位說謊 → save 時戳 currentVersion + 測試；migration 接 load 延後（additive 靠 decodeIfPresent 足夠，破壞性改動才接線——**已知架構決定**）。(2) 章節有邏輯無呈現＝死碼 → 用既有旅程日誌 toast 顯示章節轉場（非互動、屬 §4.1 章節感）。修正進行中。
+
+---
+
 ## 2026-07-04 — Session 1（續）— P1 定案 + Phase 3 開工
 
 - ✅ **使用者驗收「速度剛好」** → P1 `speed=12` 定案（ADR-010），地標間距 86400（~2h）定案。

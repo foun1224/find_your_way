@@ -8,6 +8,7 @@ public final class GameScene: SKScene {
     public static let tickInterval: Double = 2.0
 
     private var character: CharacterNode?
+    private var companion: CompanionNode?
     private var sceneryLayers: [ParallaxBackground.SceneryLayer] = []
     private var landmarkNodes: [String: SKNode] = [:]
 
@@ -75,6 +76,11 @@ public final class GameScene: SKScene {
 
         buildLandmarkNodes()
         applyWorldScroll(distance: displayedDistance)
+
+        // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
+        if gameState.companionJoined {
+            addCompanionNodeIfNeeded(animateIn: false)
+        }
     }
 
     private func buildLandmarkNodes() {
@@ -131,13 +137,33 @@ public final class GameScene: SKScene {
         // 安全網：即使發生 `dt` 尖峰（例如某條路徑漏走 `resumeWithCatchUp`），
         // 單次推進也不得超過離線上限，保證線上永遠不比離線快（紅線六）。
         let cappedDt = min(dt, OfflineProgress.capSeconds)
-        let (newState, _) = SimulationEngine.advance(gameState, bySeconds: cappedDt, rules: rules)
+        let oldDistance = gameState.distance
+        let (newState, _, crossedEvents, companionJustJoined) = SimulationEngine.advance(
+            gameState, bySeconds: cappedDt, rules: rules
+        )
         var updated = newState
         updated.lastActiveTimestamp = timeProvider.now
         gameState = updated
         displayedDistance = gameState.distance
         applyWorldScroll(distance: displayedDistance)
         onStateChanged?(gameState)
+
+        // 章節轉場（`09` §4.1）：跨越章節門檻時在旅程日誌顯示一行（非互動）。
+        let crossedChapters = GrowthStage.chaptersCrossed(from: oldDistance, to: gameState.distance)
+
+        var toastDelay: TimeInterval = 0
+        if companionJustJoined {
+            presentCompanionMeetPeak()
+            toastDelay += 3.0
+        }
+        for event in crossedEvents where event.id != Companion.meetEvent.id {
+            scheduleJourneyLog(text: event.logText, after: toastDelay)
+            toastDelay += 3.0
+        }
+        for chapter in crossedChapters {
+            scheduleJourneyLog(text: chapterTransitionText(chapter), after: toastDelay)
+            toastDelay += 3.0
+        }
     }
 
     /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置。
@@ -184,11 +210,54 @@ public final class GameScene: SKScene {
         }
         run(catchUp)
 
-        showJourneyLog(for: outcome)
+        // 逐行呈現：地標/一般旅程 → 里程事件 → 章節轉場 → 旅伴相遇（peak，若有），
+        // 彼此錯開，避免同時彈出一堆訊息（洗版）。
+        var delay: TimeInterval = 0
+        for text in journeyLogTexts(for: outcome) {
+            scheduleJourneyLog(text: text, after: delay)
+            delay += 3.0
+        }
+        for chapter in outcome.newChapters {
+            scheduleJourneyLog(text: chapterTransitionText(chapter), after: delay)
+            delay += 3.0
+        }
+
+        if outcome.companionJustJoined {
+            let wait = SKAction.wait(forDuration: delay)
+            let peak = SKAction.run { [weak self] in self?.presentCompanionMeetPeak() }
+            run(SKAction.sequence([wait, peak]))
+        }
     }
 
-    private func showJourneyLog(for outcome: OfflineOutcome) {
-        let label = SKLabelNode(text: journeyLogText(for: outcome))
+    /// 章節轉場的旅程日誌樣式（`09` §4.1 章節感，非互動）：破折號包夾，與事件 toast 同機制但區別呈現。
+    private func chapterTransitionText(_ chapterName: String) -> String {
+        "— \(chapterName) —"
+    }
+
+    /// 延遲後顯示一行旅程日誌（與事件 toast 同機制），供錯開多行呈現。
+    private func scheduleJourneyLog(text: String, after delay: TimeInterval) {
+        let wait = SKAction.wait(forDuration: delay)
+        let show = SKAction.run { [weak self] in self?.showJourneyLog(text: text) }
+        run(SKAction.sequence([wait, show]))
+    }
+
+    /// 敘事留白語氣（`02` §5）：只說「走過了○○ / 又走了一段路」，
+    /// 不用「荒廢/落後/枯萎/浪費」等施壓字眼（紅線一/二）。`wasCapped` 不呈現成損失（紅線二）。
+    private func journeyLogTexts(for outcome: OfflineOutcome) -> [String] {
+        var lines: [String] = []
+        if let last = outcome.newLandmarks.last {
+            lines.append("你不在時，走過了「\(last.name)」")
+        } else if outcome.newEvents.isEmpty {
+            lines.append("你不在時，又走了一段路")
+        }
+        for event in outcome.newEvents where event.id != Companion.meetEvent.id {
+            lines.append(event.logText)
+        }
+        return lines
+    }
+
+    private func showJourneyLog(text: String) {
+        let label = SKLabelNode(text: text)
         label.fontSize = 14
         label.fontColor = Palette.travelerTerracotta.skColor
         label.position = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) * 0.85)
@@ -203,12 +272,55 @@ public final class GameScene: SKScene {
         label.run(SKAction.sequence([fadeIn, hold, fadeOut, remove]))
     }
 
-    /// 敘事留白語氣（`02` §5）：只說「走過了○○ / 又走了一段路」，
-    /// 不用「荒廢/落後/枯萎/浪費」等施壓字眼（紅線一/二）。
-    private func journeyLogText(for outcome: OfflineOutcome) -> String {
-        if let last = outcome.newLandmarks.last {
-            return "你不在時，走過了「\(last.name)」"
-        }
-        return "你不在時，又走了一段路"
+    // MARK: - 旅伴相遇 peak（`09` §3.2/§3.4：暖、慢、有機，禁止 overshoot/閃爆/震動）
+
+    /// 相遇為 peak event：暖陽金光暈 + 慢放大，數秒即散；旅伴之後常態同行（構圖主從，`09` §3.3）。
+    private func presentCompanionMeetPeak() {
+        addCompanionNodeIfNeeded(animateIn: true)
+        showJourneyLog(text: Companion.logText)
+    }
+
+    /// 建立旅伴節點（若尚未建立）。`animateIn == true` 時播放 peak 光暈+慢放大（僅在「當下相遇」發生一次）；
+    /// `animateIn == false` 用於載入已相遇存檔時直接常態呈現（不重播 peak）。
+    private func addCompanionNodeIfNeeded(animateIn: Bool) {
+        guard companion == nil else { return }
+        let anchorX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
+        let screenY = Double(size.height) * 0.25
+        // 略後於主角（構圖主從：主角最前最亮，旅伴略小/略後/明度略降）。
+        let node = CompanionNode(screenX: anchorX - 34, screenY: screenY - 4)
+        node.zPosition = 9 // 低於主角的 10。
+        addChild(node)
+        companion = node
+
+        guard animateIn else { return }
+
+        // 暖陽金光暈：溫暖「亮起來」而非「爆一下」——慢放大、數秒即散，無 overshoot/彈跳/震動（`03` §3.4）。
+        let glow = SKShapeNode(circleOfRadius: CompanionNode.size)
+        glow.position = node.position
+        glow.zPosition = 8
+        glow.fillColor = Palette.warmSunGold.skColor
+        glow.strokeColor = .clear
+        glow.alpha = 0
+        glow.setScale(0.6)
+        addChild(glow)
+
+        node.alpha = 0
+        node.setScale(0.85)
+        let nodeFadeIn = SKAction.group([
+            SKAction.fadeAlpha(to: 0.7, duration: 1.6),
+            SKAction.scale(to: 1.0, duration: 1.6)
+        ])
+        nodeFadeIn.timingMode = .easeOut
+        node.run(nodeFadeIn)
+
+        let glowFadeIn = SKAction.group([
+            SKAction.fadeAlpha(to: 0.35, duration: 1.4),
+            SKAction.scale(to: 1.6, duration: 1.4)
+        ])
+        glowFadeIn.timingMode = .easeOut
+        let glowLinger = SKAction.wait(forDuration: 1.2)
+        let glowFadeOut = SKAction.fadeOut(withDuration: 2.0)
+        let glowRemove = SKAction.removeFromParent()
+        glow.run(SKAction.sequence([glowFadeIn, glowLinger, glowFadeOut, glowRemove]))
     }
 }

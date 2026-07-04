@@ -85,6 +85,61 @@ final class SaveStoreTests: XCTestCase {
         XCTAssertEqual(backupState, firstState)
     }
 
+    /// 誠實標版：save 後寫進磁碟的 JSON `schemaVersion` 應為當前版本（2），
+    /// 即使傳入的 state 帶舊版號。
+    func testSaveStampsCurrentSchemaVersionOnDisk() throws {
+        let store = makeStore()
+        let oldVersionedState = GameState(schemaVersion: 1, distance: 42)
+
+        XCTAssertTrue(store.save(oldVersionedState))
+
+        let paths = SavePaths(rootDirectory: tmpRoot)
+        let data = try Data(contentsOf: paths.saveFileURL)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(json?["schemaVersion"] as? Int, SaveSchema.currentVersion)
+        XCTAssertEqual(SaveSchema.currentVersion, 2)
+    }
+
+    /// v1 舊檔（無新欄位）load → re-save → 變成 schemaVersion 2，舊資料不丟。
+    func testV1SaveFileLoadReSaveBecomesV2WithoutLosingOldData() throws {
+        let paths = SavePaths(rootDirectory: tmpRoot)
+        try paths.ensureDirectoryExists()
+
+        // 手寫一個 v1 檔：schemaVersion 1、無 eventsEncountered/companionJoined。
+        let v1Json = """
+        {
+            "schemaVersion": 1,
+            "distance": 12345.6,
+            "landmarksPassed": ["windy_pass", "nameless_bend"],
+            "lastActiveTimestamp": 1000,
+            "growth": 78.9
+        }
+        """.data(using: .utf8)!
+        try v1Json.write(to: paths.saveFileURL)
+
+        let store = makeStore()
+        let loaded = try XCTUnwrap(store.load())
+        // 向後相容：v1 檔載入時新欄位給安全預設。
+        XCTAssertEqual(loaded.eventsEncountered, [])
+        XCTAssertFalse(loaded.companionJoined)
+
+        XCTAssertTrue(store.save(loaded))
+
+        // re-save 後磁碟上為 v2，舊資料原樣保留。
+        let reloadedData = try Data(contentsOf: paths.saveFileURL)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: reloadedData) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(json["distance"] as? Double, 12345.6)
+        XCTAssertEqual(json["growth"] as? Double, 78.9)
+        XCTAssertEqual(json["landmarksPassed"] as? [String], ["windy_pass", "nameless_bend"])
+
+        let reloaded = try XCTUnwrap(store.load())
+        XCTAssertEqual(reloaded.schemaVersion, 2)
+        XCTAssertEqual(reloaded.distance, 12345.6, accuracy: 0.0001)
+        XCTAssertEqual(reloaded.growth, 78.9, accuracy: 0.0001)
+        XCTAssertEqual(reloaded.landmarksPassed, ["windy_pass", "nameless_bend"])
+    }
+
     func testFutureSchemaVersionIsTreatedAsInvalidAndFallsBackSafely() throws {
         let paths = SavePaths(rootDirectory: tmpRoot)
         try paths.ensureDirectoryExists()

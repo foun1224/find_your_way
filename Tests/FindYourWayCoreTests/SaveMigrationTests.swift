@@ -1,11 +1,12 @@
 import XCTest
 @testable import FindYourWayCore
 
+/// T11：schema 1→2 真實遷移（`09_PHASE3_SPEC.md` §5 T11），取代 Phase 2 的假想示範。
 final class SaveMigrationTests: XCTestCase {
 
-    // MARK: - MigrationV1toV2（示範用遷移骨架）
+    // MARK: - MigrationV1toV2（真實遷移：v1 缺 eventsEncountered/companionJoined → 補預設）
 
-    func testMigrationV1toV2UpgradesVersionAndAddsDefaultField() {
+    func testMigrationV1toV2UpgradesVersionAndAddsDefaultFields() {
         let migration = MigrationV1toV2()
         let v1Json: [String: Any] = [
             "schemaVersion": 1,
@@ -18,12 +19,14 @@ final class SaveMigrationTests: XCTestCase {
         let migrated = migration.migrate(v1Json)
 
         XCTAssertEqual(migrated["schemaVersion"] as? Int, 2)
-        // 舊資料不丟失
+        // 舊資料不丟失。
         XCTAssertEqual(migrated["distance"] as? Double, 100.0)
         XCTAssertEqual(migrated["growth"] as? Double, 5.0)
         XCTAssertEqual(migrated["landmarksPassed"] as? [String], ["windy_pass"])
-        // 新欄位給預設值
-        XCTAssertEqual(migrated["growthStages"] as? [String], [])
+        XCTAssertEqual(migrated["lastActiveTimestamp"] as? Double, 1_000.0)
+        // 新欄位給預設值。
+        XCTAssertEqual(migrated["eventsEncountered"] as? [String], [])
+        XCTAssertEqual(migrated["companionJoined"] as? Bool, false)
     }
 
     func testMigrationDeclaresFromAndToVersions() {
@@ -32,16 +35,18 @@ final class SaveMigrationTests: XCTestCase {
         XCTAssertEqual(migration.toVersion, 2)
     }
 
-    func testMigrationDoesNotOverwriteExistingNewField() {
+    func testMigrationDoesNotOverwriteExistingNewFields() {
         let migration = MigrationV1toV2()
-        let jsonWithExistingField: [String: Any] = [
+        let jsonWithExistingFields: [String: Any] = [
             "schemaVersion": 1,
-            "growthStages": ["seedling"]
+            "eventsEncountered": ["wildflower_slope"],
+            "companionJoined": true
         ]
 
-        let migrated = migration.migrate(jsonWithExistingField)
+        let migrated = migration.migrate(jsonWithExistingFields)
 
-        XCTAssertEqual(migrated["growthStages"] as? [String], ["seedling"])
+        XCTAssertEqual(migrated["eventsEncountered"] as? [String], ["wildflower_slope"])
+        XCTAssertEqual(migrated["companionJoined"] as? Bool, true)
     }
 
     // MARK: - 當前版本直解 / 缺欄位向後相容（走實際 GameState 解碼路徑）
@@ -53,13 +58,37 @@ final class SaveMigrationTests: XCTestCase {
             "distance": 42,
             "landmarksPassed": [],
             "lastActiveTimestamp": 0,
-            "growth": 0
+            "growth": 0,
+            "eventsEncountered": [],
+            "companionJoined": false
         }
         """.data(using: .utf8)!
 
         let state = try JSONDecoder().decode(GameState.self, from: json)
         XCTAssertEqual(state.schemaVersion, SaveSchema.currentVersion)
         XCTAssertEqual(state.distance, 42)
+    }
+
+    /// 雙保險（`09` §2.5）：v1 存檔即使不經遷移器，`decodeIfPresent` 也解出安全預設。
+    func testV1SaveWithoutRunningMigratorStillDecodesSafeDefaults() throws {
+        let json = """
+        {
+            "schemaVersion": 1,
+            "distance": 100,
+            "landmarksPassed": ["windy_pass"],
+            "lastActiveTimestamp": 500,
+            "growth": 5
+        }
+        """.data(using: .utf8)!
+
+        let state = try JSONDecoder().decode(GameState.self, from: json)
+        // 舊資料保留。
+        XCTAssertEqual(state.distance, 100)
+        XCTAssertEqual(state.landmarksPassed, ["windy_pass"])
+        XCTAssertEqual(state.growth, 5)
+        // 新欄位安全預設。
+        XCTAssertEqual(state.eventsEncountered, [])
+        XCTAssertFalse(state.companionJoined)
     }
 
     func testMissingFieldsDecodeWithDefaults() throws {
@@ -71,6 +100,8 @@ final class SaveMigrationTests: XCTestCase {
         XCTAssertEqual(state.distance, 0)
         XCTAssertEqual(state.landmarksPassed, [])
         XCTAssertEqual(state.growth, 0)
+        XCTAssertEqual(state.eventsEncountered, [])
+        XCTAssertFalse(state.companionJoined)
     }
 
     // MARK: - version > current 安全降級（透過 SaveStore，不 crash）
@@ -89,7 +120,9 @@ final class SaveMigrationTests: XCTestCase {
             "distance": 1,
             "landmarksPassed": [],
             "lastActiveTimestamp": 0,
-            "growth": 0
+            "growth": 0,
+            "eventsEncountered": [],
+            "companionJoined": false
         }
         """.data(using: .utf8)!
         try futureJson.write(to: paths.saveFileURL)

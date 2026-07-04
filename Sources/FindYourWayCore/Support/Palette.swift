@@ -52,6 +52,9 @@ public enum Palette {
     public static let pineShadowHex = "#4C8054"
     /// 山徑赭：暖赭色，用於貼地路面條帶，作為「沿路走」的速度參照。
     public static let trailOchreHex = "#C9A36B"
+    /// 暖陽金：旅伴相遇 peak event 的光暈色（`03` §3.3/§3.4；`09` §3.2/§10.3）。
+    /// 用於「溫暖地亮起來」，禁止搭配 overshoot/閃爆等 dopamine-hit 動效語言。
+    public static let warmSunGoldHex = "#F2C14E"
 
     public static var travelerTerracotta: RGBA { parseHex(travelerTerracottaHex)! }
     public static var skyAzure: RGBA { parseHex(skyAzureHex)! }
@@ -60,6 +63,7 @@ public enum Palette {
     public static var inkUmber: RGBA { parseHex(inkUmberHex)! }
     public static var pineShadow: RGBA { parseHex(pineShadowHex)! }
     public static var trailOchre: RGBA { parseHex(trailOchreHex)! }
+    public static var warmSunGold: RGBA { parseHex(warmSunGoldHex)! }
 }
 
 #if canImport(AppKit)
@@ -78,6 +82,7 @@ public extension Palette {
     static var inkUmberColor: NSColor { inkUmber.nsColor }
     static var pineShadowColor: NSColor { pineShadow.nsColor }
     static var trailOchreColor: NSColor { trailOchre.nsColor }
+    static var warmSunGoldColor: NSColor { warmSunGold.nsColor }
 }
 #endif
 

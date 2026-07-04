@@ -26,7 +26,13 @@ public struct SaveStore {
             try paths.ensureDirectoryExists()
             backupExistingSaveIfValid()
 
-            let data = try encoder.encode(state)
+            // 誠實標版：寫檔前把 schemaVersion 校正為當前版本，避免「資料已是 v2 結構、
+            // 欄位卻仍寫成舊版號」的說謊。additive 欄位靠 `GameState` 的 decodeIfPresent 向後相容，
+            // migration 尚未接進 load runtime（待未來破壞性改動才接線）。
+            var stamped = state
+            stamped.schemaVersion = SaveSchema.currentVersion
+
+            let data = try encoder.encode(stamped)
             try data.write(to: paths.saveFileURL, options: .atomic)
             return true
         } catch {

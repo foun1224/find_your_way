@@ -24,15 +24,23 @@ public enum OfflineProgress {
         let elapsed = min(max(rawElapsed, 0), capSeconds)
         let wasCapped = rawElapsed > capSeconds
 
-        let (advanced, crossed) = SimulationEngine.advance(state, bySeconds: elapsed, rules: rules)
+        let (advanced, crossedLandmarks, crossedEvents, companionJustJoined) = SimulationEngine.advance(
+            state, bySeconds: elapsed, rules: rules
+        )
 
         var newState = advanced
         newState.lastActiveTimestamp = now
 
+        // 章節轉場（`09` §4.1）：由 distance 純函式衍生，與線上逐 tick 累積一致（確定性）。
+        let crossedChapters = GrowthStage.chaptersCrossed(from: state.distance, to: newState.distance)
+
         let outcome = OfflineOutcome(
             elapsedSecondsApplied: elapsed,
             distanceGained: newState.distance - state.distance,
-            newLandmarks: crossed,
+            newLandmarks: crossedLandmarks,
+            newEvents: crossedEvents,
+            newChapters: crossedChapters,
+            companionJustJoined: companionJustJoined,
             wasCapped: wasCapped
         )
 

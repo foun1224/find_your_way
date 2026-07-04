@@ -61,7 +61,7 @@ final class OfflineProgressTests: XCTestCase {
     func testOnlineAndOfflineProduceSameDistanceGainForSameDuration() {
         let duration: Double = 5_000
         let onlineState = GameState(distance: 10)
-        let (onlineAdvanced, _) = SimulationEngine.advance(onlineState, bySeconds: duration, rules: rules)
+        let (onlineAdvanced, _, _, _) = SimulationEngine.advance(onlineState, bySeconds: duration, rules: rules)
         let onlineGain = onlineAdvanced.distance - onlineState.distance
 
         let offlineState = GameState(distance: 10, lastActiveTimestamp: 0)

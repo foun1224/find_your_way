@@ -31,4 +31,12 @@ public struct SimulationRules: Equatable {
         guard new > old else { return [] }
         return Landmark.all.filter { $0.distance > old && $0.distance <= new }
     }
+
+    /// 回傳 `(old, new]` 區間內新通過的里程事件（A 類，`09` §2.3）：
+    /// 與 `landmarks(crossedFrom:to:)` 完全同構——確定性、只看里程軸，不擲骰、不依賴 `now`。
+    /// 旅伴相遇（§3）不含於此，由 `Companion.hasMet` 另行判定並併入呼叫端的事件序列。
+    public func events(crossedFrom old: Double, to new: Double) -> [JourneyEvent] {
+        guard new > old else { return [] }
+        return JourneyEvent.all.filter { $0.distance > old && $0.distance <= new }
+    }
 }

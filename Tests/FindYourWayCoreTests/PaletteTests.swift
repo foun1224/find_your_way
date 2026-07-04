@@ -41,4 +41,8 @@ final class PaletteTests: XCTestCase {
         XCTAssertEqual(Palette.pineShadow, Palette.parseHex("#4C8054"))
         XCTAssertEqual(Palette.trailOchre, Palette.parseHex("#C9A36B"))
     }
+
+    func testWarmSunGoldMatchesSpecHex() {
+        XCTAssertEqual(Palette.warmSunGold, Palette.parseHex("#F2C14E"))
+    }
 }
