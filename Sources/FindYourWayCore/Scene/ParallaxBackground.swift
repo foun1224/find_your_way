@@ -45,12 +45,6 @@ public enum ParallaxBackground {
     /// `CharacterNode` 站立的基準線（`GameScene` 用本值算角色腳邊 y）。
     public static let groundDisplayHeight: CGFloat = 40
 
-    /// 相鄰層之間的重疊量（點）：讓「較近的層」（zPosition 較高）蓋住「較遠的層」圖塊本身自帶的
-    /// 小片天空，避免明顯的接縫（各條 panorama 是各自獨立小場景，非無縫延伸）。
-    private static let groundNearOverlap: CGFloat = 10
-    private static let foreMidOverlap: CGFloat = 10
-    private static let midFarOverlap: CGFloat = 15
-
     /// 近景散落道具的顯示高度（點）：與 Phase 4b 既有數值一致，地域化後沿用同一常數。
     private static let propDisplayHeight: CGFloat = 34
 
@@ -72,47 +66,39 @@ public enum ParallaxBackground {
         else {
             return nil
         }
+        // `mid`/`fore` 素材本身各是一條「含自己天空的完整場景」（非可疊加延伸片段），過去把
+        // far/mid/fore 依高度垂直堆疊會在畫面中同時露出多條天空+地平線、層間硬接縫，變成
+        // 「橫條拼貼」而非單一連貫場景（見本檔案上方 `18` 之後、Fable 截圖診斷）。
+        // 修法：只用 `far`（最遠、涵蓋最廣的完整場景）當唯一 backdrop，等比放大到「填滿場景高度」
+        // 鋪滿整個視窗、慢速視差；`mid`/`fore` 仍照常存在於硬碟（其他用途/未來可能重啟用），
+        // 只是不再建節點渲染，避免視覺雜訊。`mid` texture 仍在 guard 中被要求存在，作為
+        // 「這是一個資源完整的地域」的完整性檢查，維持向下相容（不因拿掉 mid 渲染而放寬地域
+        // 資源需求）。
+        _ = midTexture
         let foreTexture = ArtCatalog.texture(relativePath: base + "fore.png")
+        _ = foreTexture
 
         let container = SKNode()
         parent.addChild(container)
 
         let scale = groundDisplayHeight / groundTexture.size().height
-        let groundHeight = groundTexture.size().height * scale
 
         var layers: [SceneryLayer] = []
+
+        // far backdrop：獨立縮放比例（與 ground 的 `scale` 脫鉤），目標是讓其顯示高度
+        // 「≥ 場景高度」以填滿整個視窗（不留頂部露空），bottomY 對齊視窗底。
+        let farScale = size.height / farTexture.size().height
+        let far = buildLayer(
+            in: container, sceneWidth: Double(size.width), texture: farTexture,
+            scale: farScale, bottomY: 0, zPosition: -30, layerFactor: 0.2
+        )
+        layers.append(far)
 
         let ground = buildLayer(
             in: container, sceneWidth: Double(size.width), texture: groundTexture,
             scale: scale, bottomY: 0, zPosition: -10, layerFactor: 1.0
         )
         layers.append(ground)
-
-        // 有 fore（前景）層時插在 ground 與 mid 之間；沒有則 mid 直接疊在 ground 之上（草原現況）。
-        var nextBottomY = Double(groundHeight - groundNearOverlap)
-        if let foreTexture {
-            let foreHeight = foreTexture.size().height * scale
-            let fore = buildLayer(
-                in: container, sceneWidth: Double(size.width), texture: foreTexture,
-                scale: scale, bottomY: nextBottomY, zPosition: -15, layerFactor: 0.65
-            )
-            layers.append(fore)
-            nextBottomY = nextBottomY + Double(foreHeight - foreMidOverlap)
-        }
-
-        let midHeight = midTexture.size().height * scale
-        let mid = buildLayer(
-            in: container, sceneWidth: Double(size.width), texture: midTexture,
-            scale: scale, bottomY: nextBottomY, zPosition: -20, layerFactor: 0.45
-        )
-        layers.append(mid)
-
-        let farBottomY = nextBottomY + Double(midHeight - midFarOverlap)
-        let far = buildLayer(
-            in: container, sceneWidth: Double(size.width), texture: farTexture,
-            scale: scale, bottomY: farBottomY, zPosition: -30, layerFactor: 0.15
-        )
-        layers.append(far)
 
         let propNodes = buildPropNodes(regionFolder: regionFolder, in: container)
         let npcNodes = buildNpcNodes(regionFolder: regionFolder, in: container, reducedMotion: reducedMotion)
