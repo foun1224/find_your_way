@@ -103,6 +103,16 @@
   - Phase 2 `WorldScroll`（`08` §3.8）依此：角色錨點左側固定，parallax 各層依 `distance` 向左捲動。
   - `03_DESIGN_SYSTEM` §2.4 圖層：角色層螢幕位置固定於左側。
 
+## ADR-010：P1 推進速率定案 = 12，Phase 3 里程數值定案
+
+- **狀態**：Accepted (2026-07-04) — 使用者 live 驗收「速度剛好」
+- **Decision**：
+  - **P1 推進速率 `SimulationRules.speed = 12`**（單位/秒，1 單位≈1pt）定案。悠閒可見的散步、低喚醒（`02` §6）。
+  - **地標間距 86400**（≈2 小時/地標）定案。
+  - **Phase 3 里程數值**（皆相對 P1，集中常數、可調）：旅伴相遇 `meetDistance = 237600`（≈5.5h travel，第 2–3 地標間，先單人鋪陳再相遇＝earned peak，ADR-004）；里程事件約每 ~1.5–2h 一個（稀疏，§9 E1）；章節門檻見 `09` §10。
+- **Rationale**：P1 是 Phase 3 所有節奏的錨；使用者確認手感後即可定案下游數值。全為單一常數，日後可調。
+- **Consequences**：`09_PHASE3_SPEC` §9 待決參數轉為定案（見該檔 §10 敘事內容附錄，由 Fable 親自 authored）。Phase 3 可開工。
+
 ---
 
 ## 待決策 (Open Questions)

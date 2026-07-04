@@ -365,4 +365,46 @@ FindYourWay/
 
 ---
 
-*本文件為 Phase 3 建置規格草稿，待 Fable review 定案。API 片段為示意，實作以官方文件與既有程式碼結構為準。§9 待決項與 §8 依賴（尤其 P1 手感驗收）未滿足前，事件/相遇/階段的具體里程數值不得硬編定案。*
+## 10. 敘事內容（Fable authored，定案 · P1=12 / 間距 86400 已確認）
+
+> 由 Fable 親自撰寫，把關「留白可投射、不施壓、不量化」的語氣（`02` §5 敘事認同）。
+> 皆為 authored 固定表（§2.5 E5）。所有 `distance` 為單位（1 單位≈1pt，speed 12）。**純情感/敘事回饋、零功利**（ADR-006）。
+> 名稱/文案可再微調，數值集中常數（`Landmark.all` / `JourneyEvent.all` / `Companion.meetDistance` / `GrowthStage` 門檻）。
+
+### 10.1 地標顯示名（Landmark，改為留白中文；`Landmark.all` 五個，間距 86400）
+| distance | id | 顯示名 |
+|---|---|---|
+| 86400 | windy_pass | 風起的埡口 |
+| 172800 | nameless_bend | 無名的河灣 |
+| 259200 | old_bridge | 一座舊石橋 |
+| 345600 | misty_forest_edge | 霧起的林邊 |
+| 432000 | first_snowline | 遠山的第一道雪線 |
+
+### 10.2 里程事件（`JourneyEvent.all`，A 類，稀疏 ~每 1.5–2h，純情感/敘事）
+| distance | id | 類型 | 旅程日誌文案（留白語氣） |
+|---|---|---|---|
+| 43200 | wildflower_slope | 風景高光 | 「路過一片開得正好的野花坡。」 |
+| 129600 | streamside_rest | 紮營/休息 | 「在溪邊歇了歇腳，水很涼。」 |
+| 216000 | bird_on_stone | 小相遇 | 「一隻鳥停在石上，看了你一會兒，才飛走。」 |
+| 302400 | cloud_shadows | 風景高光 | 「雲影慢慢掠過整片草原。」 |
+| 388800 | small_campfire | 紮營 | 「夜裡生了一小堆火，聽了一會兒柴響。」 |
+
+### 10.3 旅伴相遇（`Companion.meetDistance = 237600`，特殊里程事件，peak）
+- **觸發**：跨越 237600（第 2–3 地標之間，約 5.5h travel）→ `companionJoined = true`（單調）。
+- **日誌文案**：「在岔路口，有個人也正要往同一個方向。你們沒說話，卻自然地一起走了。」
+- **呈現**：暖陽金 `#F2C14E` 光暈 + 慢放大，數秒即散（`03` §3.4 無 jolt——溫暖亮起，不是爆一下）。之後 `CompanionNode` 常態同行（沉默、僅肢體語言、不命名、E3）。
+
+### 10.4 章節（`GrowthStage.chapterName`，具象成長，非等級數字 E4）
+| 起始 distance | 章節名 |
+|---|---|
+| 0 | 第一章 · 啟程 |
+| 237600 | 第二章 · 有人同行（相遇後） |
+| 432000 | 第三章 · 遠方的雪 |
+
+- 章節僅在 progressive disclosure（hover/點日誌）顯示，**不常駐 HUD**（`03` §3.3）。外觀漸變 Phase 3 用佔位（如相遇後旅伴在場、姿態微變），正式美術 Phase 4。
+
+> **定案摘要**：§9 待決 E1（稀疏，5 個里程事件）、E2（meetDistance 237600）、E4（章節名非等級）、E6（上表文案）、E7（章節門檻）皆定案；E3（沉默留白）、E5（authored 表）沿用已鎖。全部單一常數/表，可調。
+
+---
+
+*本文件 §1–§9 為 Phase 3 建置規格；§10 為 Fable authored 敘事內容（定案）。P1=12 已由使用者驗收，Phase 3 可開工。*

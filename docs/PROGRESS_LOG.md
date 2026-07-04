@@ -31,7 +31,28 @@
 
 **使用者截圖回報**：✅ 透明懸浮視窗成立（看得到終端在後、無邊框）；🐞 (1) 天空/草地色帶橫向錯位；(2) 看不出速率。
 **根因**：`ParallaxBackground` 對滿版純色帶套不同 layerFactor（0.1/0.4）→ 兩帶各自左移不同量 → 錯位+露空；純色帶捲動無參照物＋speed=1（離線設計）→ 現場近乎靜止。
-**Fable 處置（triage：影響當前 phase 核心價值 + 阻塞 P1 手感判斷 → 緊急插修，不延 Phase 4）**：規格加 `08` §4b；委派 Sonnet：(1) 天空/草地固定滿版填充不做視差；(2) 加可循環佔位景物（近景草叢+遠景丘陵）呈現可見運動；(3) speed 1→12、Landmark 間距 10800→86400（維持 ~1–2h/地標，可見散步）；(4) 測試不回歸、更新離線期望值。修正進行中。
+**Fable 處置（triage：影響當前 phase 核心價值 + 阻塞 P1 手感判斷 → 緊急插修，不延 Phase 4）**：規格加 `08` §4b。
+**已完成並提交（faf940a）**：
+- 天空/草地固定滿版（消錯位）；WorldScroll.wrappedX 純函式驅動可循環景物：遠景丘陵（慢）+ 近景松影綠草叢 + 山徑赭路面（快）。
+- speed 1→12、Landmark 間距 10800→86400（~2h/地標）。Palette 加 Pine Shadow/Trail Ochre。
+- Fable 兩輪截圖驗證：對齊 ✓、近景景物對比可見 ✓。測試 63/63 綠。
+- **git**：e9f348e（Phase 0-2）、faf940a（視覺修正）。使用者已授權自動 commit。
+
+**下一步**：使用者 live 跑判斷 speed=12 散步手感（P1）→ 確認後定 Phase 3 里程數值、開工 Phase 3。**小可調點**：角色目前站草地、路面在其下方；若要「走在路上」可微調角色 y（留待使用者反應）。
+
+---
+
+## 2026-07-04 — Session 1（續）— P1 定案 + Phase 3 開工
+
+- ✅ **使用者驗收「速度剛好」** → P1 `speed=12` 定案（ADR-010），地標間距 86400（~2h）定案。
+- ✅ Phase 3 里程數值定案（相對 P1）：`meetDistance=237600`、5 個里程事件、章節門檻。
+- ✅ **Fable 親自 authored 敘事內容**（`09` §10）：地標留白中文名、5 個事件文案、旅伴相遇文案（沉默同行）、3 章節名。把關「留白可投射、不施壓」語氣。
+- 🔄 **委派 Sonnet 實作 Phase 3**（TDD）：JourneyEvent/events()/GameState 擴充/Companion/OfflineProgress 事件補算/GrowthStage/schema 1→2 真實遷移 + Scene 相遇 peak/CompanionNode/日誌章節。T7–T12，不回歸既有 63。
+
+**下一步（給接手 session）**
+1. 等 Sonnet 回報 → Fable 獨立 build+test + 逐檔審（尤其 T8 離線事件迴歸鎖、§7 倫理界線無 now-seeded 擲骰、相遇單調、schema 遷移不丟資料）。
+2. 通過後親跑驗證（模擬離線跨 meetDistance → 相遇觸發、事件補算）+ 請使用者畫面驗收相遇 peak/同行構圖。
+3. 里程碑自動 commit。
 
 ---
 
