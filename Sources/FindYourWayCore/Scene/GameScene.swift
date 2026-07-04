@@ -741,7 +741,7 @@ public final class GameScene: SKScene {
         }
 
         for (node, slot) in visuals.npcNodes {
-            node.position.x = CGFloat(KingdomNpcScatter.screenX(for: slot, distance: distance))
+            node.position.x = CGFloat(RegionNpcScatter.screenX(for: slot, distance: distance))
         }
     }
 

@@ -33,9 +33,9 @@ public enum ParallaxBackground {
         public let container: SKNode
         public let layers: [SceneryLayer]
         public let propNodes: [(node: SKSpriteNode, slot: PropScatter.Slot)]
-        /// 市民 NPC 節點（Stage B+，`02` §2 社會臨場感）：只有王國地域非空，草原等地域固定為 `[]`
-        /// （`KingdomNpcScatter.slots(for:)` 對非王國地域回傳空陣列）。
-        public let npcNodes: [(node: NpcNode, slot: KingdomNpcScatter.Slot)]
+        /// 居民 NPC 節點（Stage B+ → 美術大改版第 3 波泛用化，`02` §2 社會臨場感）：每個地域
+        /// 依 `RegionNpcScatter.slots(for:)` 配置一組指定居民，尚無美術/骨架地域為 `[]`。
+        public let npcNodes: [(node: NpcNode, slot: RegionNpcScatter.Slot)]
     }
 
     /// 地面平台的顯示高度（點）：作為整組背景的「主尺度」，遠景/中景/前景依同一縮放比例換算，
@@ -140,18 +140,20 @@ public enum ParallaxBackground {
         return result
     }
 
-    /// 王國市民 NPC（Stage B+，`02` §2 社會臨場感）：純裝飾，位置由 `KingdomNpcScatter.slots(for:)`
-    /// （純函式）決定，依 distance 捲動；找不到某 NPC 美術時該槽位就不放（優雅降級，不 crash）。
-    /// 非王國地域槽位表為空，自然不會冒出任何節點。
+    /// 地域居民 NPC（Stage B+ → 美術大改版第 3 波泛用化，`02` §2 社會臨場感）：純裝飾，位置由
+    /// `RegionNpcScatter.slots(for:)`（純函式）決定，依 distance 捲動；美術改讀**共享**
+    /// `Resources/art/npc/<name>.png`（不再是 `regions/<r>/npc/`——同一種 NPC 可能出現在
+    /// 多個地域，見 `RegionNpcScatter` 型別註解），找不到某 NPC 美術時該槽位就不放
+    /// （優雅降級，不 crash）。尚無配置的骨架地域槽位表為空，自然不會冒出任何節點。
     private static func buildNpcNodes(
         regionFolder: String,
         in container: SKNode,
         reducedMotion: Bool
-    ) -> [(node: NpcNode, slot: KingdomNpcScatter.Slot)] {
+    ) -> [(node: NpcNode, slot: RegionNpcScatter.Slot)] {
         let region = RegionType.allCases.first { $0.assetFolder == regionFolder } ?? .meadowOrigin
-        var result: [(node: NpcNode, slot: KingdomNpcScatter.Slot)] = []
-        for slot in KingdomNpcScatter.slots(for: region) {
-            guard let texture = ArtCatalog.texture(relativePath: "regions/\(regionFolder)/npc/\(slot.npcName).png") else { continue }
+        var result: [(node: NpcNode, slot: RegionNpcScatter.Slot)] = []
+        for slot in RegionNpcScatter.slots(for: region) {
+            guard let texture = ArtCatalog.texture(relativePath: "npc/\(slot.npcName).png") else { continue }
             // 確定性相位偏移（非隨機）：讓不同槽位的呼吸起伏不完全同步，見 `NpcNode` 說明。
             let phaseOffset = slot.baseX.truncatingRemainder(dividingBy: NpcNode.breathPeriodSeconds)
             let node = NpcNode(texture: texture, reducedMotion: reducedMotion, breathPhaseOffset: phaseOffset)

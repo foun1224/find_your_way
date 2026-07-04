@@ -1,0 +1,94 @@
+import Foundation
+
+/// 純邏輯：各地域居民 NPC 的確定性槽位表（美術大改版第 3 波，`21_ASSET_OVERHAUL_PLAN.md` §3，
+/// 泛用自 Stage B+ 的 `KingdomNpcScatter`——`02_PSYCHOLOGY_FOUNDATION.md` §2 社會臨場感，
+/// 讓每個地域都「有人」而非只有王國）。不 import SpriteKit，`ParallaxBackground.buildNpcNodes`
+/// 消費本型別算出的槽位 + `WorldScroll.wrappedX` 來畫，手法與 `PropScatter` 完全一致
+/// （同一 `distance` 永遠得到同一畫面，純裝飾、不入 `GameState`、錯過無損、零功利）。
+///
+/// NPC 美術是**跨地域共享**的單一份檔案（`Resources/art/npc/<name>.png`，不放在各地域
+/// `regions/<r>/npc/` 底下）——同一種 NPC（例如商人/旅人）會出現在不只一個地域，沒必要
+/// 重複存檔；`slots(for:)` 只決定「這個地域出現哪些 NPC 型別 + 沿街位置」。
+public enum RegionNpcScatter {
+
+    /// 單一 NPC 槽位：`baseX` 落在 `[0, span)`，`npcName` 對應 `Resources/art/npc/<name>.png`。
+    public struct Slot: Equatable {
+        public let baseX: Double
+        public let npcName: String
+
+        public init(baseX: Double, npcName: String) {
+            self.baseX = baseX
+            self.npcName = npcName
+        }
+    }
+
+    /// 循環週期（點）：與 `PropScatter.span` 同值，確保畫面永遠有居民覆蓋、不會忽然露出一片空城。
+    public static let span: Double = 900
+
+    /// 王國首都地域槽位表（沿用 Stage B+ 既有王國市民排法，士兵/衛兵隊長/貴族站崗巡邏交錯）——
+    /// 美術大改版第 3 波把美術換成共享 `npc/` 資料夾裡的王室成員（`21` §3：國王/王后/公主/
+    /// 大臣/騎士/衛兵）取代舊 `regions/kingdom/npc/{soldier,guard,noble}.png` 代表幀，
+    /// 間距手法不變（比道具槽位疏落，維持 `02` §6 低喚醒的克制感）。
+    public static let kingdomSlots: [Slot] = [
+        Slot(baseX: 60, npcName: "guard"),
+        Slot(baseX: 220, npcName: "minister"),
+        Slot(baseX: 380, npcName: "knight"),
+        Slot(baseX: 540, npcName: "queen"),
+        Slot(baseX: 700, npcName: "king"),
+        Slot(baseX: 830, npcName: "princess"),
+    ]
+
+    /// 田園地域（草原/村莊 A/村莊 B）共用槽位表（`21` §3）：農夫/麵包師/孩童/商人/樂手——
+    /// 近人、日常感的田園村落人口。三個地域共用同一份排法（同款田園風格，`20` §0 世界觀鐵律）。
+    public static let pastoralSlots: [Slot] = [
+        Slot(baseX: 50, npcName: "farmer"),
+        Slot(baseX: 220, npcName: "child"),
+        Slot(baseX: 390, npcName: "baker"),
+        Slot(baseX: 560, npcName: "merchant"),
+        Slot(baseX: 730, npcName: "musician"),
+    ]
+
+    /// 港口海城地域槽位表（`21` §3）：漁夫/商人/旅人——碼頭往來的人口組成。
+    public static let seaCitySlots: [Slot] = [
+        Slot(baseX: 80, npcName: "fisher"),
+        Slot(baseX: 320, npcName: "merchant"),
+        Slot(baseX: 560, npcName: "traveler"),
+    ]
+
+    /// 山谷地域槽位表（`21` §3）：藥師/學者/旅人——奇幻科技風但仍溫暖無威脅的少量居民。
+    public static let valleySlots: [Slot] = [
+        Slot(baseX: 90, npcName: "apothecary"),
+        Slot(baseX: 340, npcName: "scholar"),
+        Slot(baseX: 590, npcName: "traveler"),
+    ]
+
+    /// 天空地域（天空村莊/天空魔法城）共用槽位表（`21` §3）：學者/藥師/樂師——奇幻氛圍，
+    /// 兩地域共用同一份排法（同款浮空奇幻風格）。
+    public static let skySlots: [Slot] = [
+        Slot(baseX: 100, npcName: "scholar"),
+        Slot(baseX: 350, npcName: "apothecary"),
+        Slot(baseX: 600, npcName: "musician"),
+    ]
+
+    /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
+    /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
+    /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
+    public static func slots(for region: RegionType) -> [Slot] {
+        switch region {
+        case .kingdom: return kingdomSlots
+        case .meadowOrigin, .village2, .village3: return pastoralSlots
+        case .seaCity: return seaCitySlots
+        case .valley: return valleySlots
+        case .skyVillage, .skyCity: return skySlots
+        case .riverlands, .highlands, .coastalReach: return []
+        }
+    }
+
+    /// NPC 層視差係數：與道具/地面同速（`layerFactor` 1.0），維持貼地錯覺。
+    public static let layerFactor: Double = 1.0
+
+    /// 計算某槽位在給定里程下的螢幕 x（沿用 `WorldScroll.wrappedX`，同 `PropScatter.screenX`）。
+    public static func screenX(for slot: Slot, distance: Double) -> Double {
+        WorldScroll.wrappedX(baseX: slot.baseX, distance: distance, layerFactor: layerFactor, span: span)
+    }
+}

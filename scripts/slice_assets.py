@@ -33,6 +33,9 @@ VILLAGE_2_SHEET = os.path.join(REPO_ROOT, "design", "village_2.png")
 VILLAGE_3_SHEET = os.path.join(REPO_ROOT, "design", "village_3.png")
 SKY_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "sky_village.png")
 SKY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sky_city_magic.png")
+# 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3「NPC→地域分配」）：兩份共用居民 NPC 素材表。
+NPC_1_SHEET = os.path.join(REPO_ROOT, "design", "npc_1.png")
+NPC_2_SHEET = os.path.join(REPO_ROOT, "design", "npc_2.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -1143,6 +1146,79 @@ def slice_new_region_bg(sheet: Image) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
+# `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
+# 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
+# 沒有必要每個地域各存一份重複檔案。每種 NPC 只取「向前（面向鏡頭）」單幀（站姿代表幀，
+# townsfolk 純裝飾用，不需要整組走路循環），由 Read `design/npc_1.png` / `design/npc_2.png`
+# 目視 + 逐像素亮度/連通元件掃描校準座標（見 scratchpad 校準紀錄）。
+# ---------------------------------------------------------------------------
+
+# `npc_1.png`（1402x1122，近黑底 `#242527` 系）版式：4 種角色（商人/農夫/孩童/樂手）
+# 各一排、每排 4 欄（向右/向左/向前/背面）。本波只取「孩童」的向前欄（npc_2 沒有孩童，
+# 商人/農夫/樂手 npc_2 都有品質更一致的版本，統一改用 npc_2 那份維持風格一致，`21` §3 圖說
+# 「若兩張都有取品質好的一張即可」）。
+_NPC_1_BG_COLOR = (36, 37, 39)
+NPC_1_CHILD_FRONT_REGION = Region(x=700, y=615, w=220, h=220)
+
+
+def slice_npc1_child(sheet: Image) -> Image:
+    """裁出 `npc_1.png`「孩童」列向前欄代表幀，去背/去雜點/autocrop（同
+    `slice_main_role_column` 手法：`keep_largest_component_dilated` 防止頭部與身體間
+    因去背斷開 1-2px 而被誤判成兩個連通塊、砍掉頭部）。"""
+    region = NPC_1_CHILD_FRONT_REGION
+    w = min(region.w, sheet.width - region.x)
+    h = min(region.h, sheet.height - region.y)
+    cropped = sheet.crop(region.x, region.y, w, h)
+    keyed = chroma_key_flood_color(cropped, _NPC_1_BG_COLOR, threshold=26)
+    keyed = despeckle_neutral_residue(keyed)
+    keyed = keep_largest_component_dilated(keyed, dilate_px=3)
+    return autocrop(keyed)
+
+
+# `npc_2.png`（1536x1024，近黑底 `#1D1E1F` 系）版式：上下兩區塊，各 8 欄 x 4 排（向右/向左/
+# 向前/背面）。上區塊：國王/王后/王子/公主/大臣/騎士/衛兵/商人；下區塊：農夫/漁夫/麵包師/
+# 鐵匠/藥師/學者/樂師/旅人。本波只取每欄的「向前」排（第 3 排），8 欄 x 座標兩區塊共用
+# （同一份版型上下重複，逐像素欄投影校準確認上下區塊欄位 x 完全對齊，見 scratchpad 校準紀錄）。
+_NPC_2_BG_COLOR = (29, 30, 31)
+
+# 8 欄 (x, w)，由左到右：依序對應上/下區塊各自的 8 種角色名稱。
+NPC_2_COLUMN_XS: list = [
+    (130, 152),
+    (282, 154),
+    (436, 166),
+    (602, 174),
+    (776, 168),
+    (944, 160),
+    (1104, 172),
+    (1276, 144),
+]
+
+# 「向前」排 y 帶：上區塊（含頁首標題列 + 向右/向左兩排）y=284..392；下區塊（頁面下半，
+# 同款版式，含自己的標題列 + 向右/向左兩排）y=792..896。
+NPC_2_TOP_FRONT_ROW = Region(x=0, y=284, w=0, h=108)
+NPC_2_BOTTOM_FRONT_ROW = Region(x=0, y=792, w=0, h=104)
+
+NPC_2_TOP_NAMES = ["king", "queen", "prince", "princess", "minister", "knight", "guard", "merchant"]
+NPC_2_BOTTOM_NAMES = ["farmer", "fisher", "baker", "blacksmith", "apothecary", "scholar", "musician", "traveler"]
+
+
+def slice_npc2_row(sheet: Image, names: list, row_y: int, row_h: int) -> dict:
+    """裁出 `npc_2.png` 某區塊「向前」排的 8 個角色代表幀，去背/去雜點/autocrop
+    （流程同 `slice_npc1_child`）。"""
+    out = {}
+    for name, (x, w) in zip(names, NPC_2_COLUMN_XS):
+        cw = min(w, sheet.width - x)
+        ch = min(row_h, sheet.height - row_y)
+        cropped = sheet.crop(x, row_y, cw, ch)
+        keyed = chroma_key_flood_color(cropped, _NPC_2_BG_COLOR, threshold=26)
+        keyed = despeckle_neutral_residue(keyed)
+        keyed = keep_largest_component_dilated(keyed, dilate_px=3)
+        out[name] = autocrop(keyed)
+    return out
+
+
 def pad_to_common_size(frames: list) -> list:
     """把一組 frame pad 成相同尺寸（以最大寬高為準、水平置中、底部對齊）避免走路動畫抖動。"""
     if not frames:
@@ -1415,6 +1491,37 @@ def main() -> None:
             out_path = os.path.join(props_dir_out, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
+
+    # --- 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC，寫到共享
+    # `Resources/art/npc/<name>.png`（不放在各地域 `regions/<r>/npc/` 底下——`RegionNpcScatter`
+    # 只指定「哪些地域用哪些 NPC 型別」，實際美術是跨地域共享的單一份檔案）。---
+    npc_dir = os.path.join(OUT_ROOT, "npc")
+    if os.path.exists(NPC_1_SHEET):
+        npc1_sheet = decode_png(NPC_1_SHEET)
+        print(f"npc1_sheet: {npc1_sheet.width}x{npc1_sheet.height}")
+        child_img = slice_npc1_child(npc1_sheet)
+        out_path = os.path.join(npc_dir, "child.png")
+        encode_png(child_img, out_path)
+        print(f"wrote {out_path} ({child_img.width}x{child_img.height})")
+    else:
+        print(f"note: {NPC_1_SHEET} not found, skipping npc_1 slicing")
+
+    if os.path.exists(NPC_2_SHEET):
+        npc2_sheet = decode_png(NPC_2_SHEET)
+        print(f"npc2_sheet: {npc2_sheet.width}x{npc2_sheet.height}")
+        npc2_npcs = {}
+        npc2_npcs.update(slice_npc2_row(
+            npc2_sheet, NPC_2_TOP_NAMES, NPC_2_TOP_FRONT_ROW.y, NPC_2_TOP_FRONT_ROW.h,
+        ))
+        npc2_npcs.update(slice_npc2_row(
+            npc2_sheet, NPC_2_BOTTOM_NAMES, NPC_2_BOTTOM_FRONT_ROW.y, NPC_2_BOTTOM_FRONT_ROW.h,
+        ))
+        for name, img in npc2_npcs.items():
+            out_path = os.path.join(npc_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {NPC_2_SHEET} not found, skipping npc_2 slicing")
 
 
 def inspect(sheet: Image) -> None:

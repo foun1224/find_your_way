@@ -1,7 +1,7 @@
 import SpriteKit
 
 /// 王國市民 NPC 節點（Stage B+，`02_PSYCHOLOGY_FOUNDATION.md` §2 社會臨場感）：純裝飾的
-/// 靜態站立像素圖（士兵/衛兵隊長/貴族·公主代表幀），沿世界捲動（`KingdomNpcScatter`），
+/// 靜態站立像素圖（各地域居民代表幀），沿世界捲動（`RegionNpcScatter`），
 /// 不驅動任何遊戲邏輯、不入 `GameState`——純粹讓王國看起來「有人住」。
 ///
 /// 極輕微待機呼吸（同 `CharacterNode.runBreathing`，振幅/週期完全一致以維持同一套「活著」語彙、
