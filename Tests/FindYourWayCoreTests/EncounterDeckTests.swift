@@ -4,8 +4,21 @@ import XCTest
 /// `16_STAGE_A_SPEC.md` §2.2 / §5：相遇卡確定性選卡、季節過濾、不緊鄰重複、不依賴牆鐘。
 final class EncounterDeckTests: XCTestCase {
 
-    func testDeckHasTwentyFourAuthoredCards() {
-        XCTAssertEqual(EncounterDeck.all.count, 24)
+    func testDeckHasSeventySixAuthoredCards() {
+        // 24 張起手（`16` §3）+ 52 張 `17_ENCOUNTER_CARDS.md`（Fable curated · Accepted 2026-07-04）。
+        XCTAssertEqual(EncounterDeck.all.count, 76)
+    }
+
+    func testAllCardIdsAreUnique() {
+        let ids = EncounterDeck.all.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count, "卡組不應有重複 id")
+    }
+
+    func testEverySeasonHasAvailableCards() {
+        for season in Season.allCases {
+            XCTAssertGreaterThan(EncounterDeck.availableCards(for: season).count, 0,
+                                  "\(season) 過濾後可選卡數應 > 0")
+        }
     }
 
     func testSameSlotAndSeasonAlwaysProducesSameCard() {
