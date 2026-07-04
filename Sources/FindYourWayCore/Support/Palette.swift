@@ -48,12 +48,18 @@ public enum Palette {
     public static let meadowGreenHex = "#7FB069"
     public static let cloudCreamHex = "#F5EFE0"
     public static let inkUmberHex = "#3A3330"
+    /// 松影綠：較深、同系但夠對比，用於近景景物讓其在草地綠上明顯可見（`08` §4b 近景對比修正）。
+    public static let pineShadowHex = "#4C8054"
+    /// 山徑赭：暖赭色，用於貼地路面條帶，作為「沿路走」的速度參照。
+    public static let trailOchreHex = "#C9A36B"
 
     public static var travelerTerracotta: RGBA { parseHex(travelerTerracottaHex)! }
     public static var skyAzure: RGBA { parseHex(skyAzureHex)! }
     public static var meadowGreen: RGBA { parseHex(meadowGreenHex)! }
     public static var cloudCream: RGBA { parseHex(cloudCreamHex)! }
     public static var inkUmber: RGBA { parseHex(inkUmberHex)! }
+    public static var pineShadow: RGBA { parseHex(pineShadowHex)! }
+    public static var trailOchre: RGBA { parseHex(trailOchreHex)! }
 }
 
 #if canImport(AppKit)
@@ -70,6 +76,8 @@ public extension Palette {
     static var meadowGreenColor: NSColor { meadowGreen.nsColor }
     static var cloudCreamColor: NSColor { cloudCream.nsColor }
     static var inkUmberColor: NSColor { inkUmber.nsColor }
+    static var pineShadowColor: NSColor { pineShadow.nsColor }
+    static var trailOchreColor: NSColor { trailOchre.nsColor }
 }
 #endif
 

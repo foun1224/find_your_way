@@ -21,6 +21,20 @@ public enum WorldScroll {
         -distance * layerFactor
     }
 
+    /// 可循環佔位景物層的螢幕 x（`08` §4b）：景物依 `distance × layerFactor` 向左捲動，
+    /// 移出畫面後 wrap 回收（週期 `span`），形成連續可見的運動。純裝飾、不入 `GameState`。
+    ///
+    /// 回傳值落在 `[0, span)`：`distance` 增加時值減少（往左移），到達 0 後 wrap 回 `span`（右側重入）。
+    /// - Parameters:
+    ///   - baseX: 該景物在單一週期內的基準槽位（`0..<span`）。
+    ///   - span: 循環週期（點）；通常設為 ≥ 場景寬度 + 一格間距，確保畫面永遠有景物覆蓋。
+    public static func wrappedX(baseX: Double, distance: Double, layerFactor: Double, span: Double) -> Double {
+        guard span > 0 else { return baseX }
+        let shifted = baseX - distance * layerFactor
+        let m = shifted.truncatingRemainder(dividingBy: span)
+        return m < 0 ? m + span : m
+    }
+
     /// 地標在畫面上的 x 座標：以角色錨點 `characterAnchorX` 為基準，
     /// 隨 `currentDistance` 逼近而向左移入 → 抵達時對齊角色 → 通過後繼續往左移出畫面。
     public static func landmarkScreenX(

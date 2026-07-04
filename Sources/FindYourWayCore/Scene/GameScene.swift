@@ -8,7 +8,7 @@ public final class GameScene: SKScene {
     public static let tickInterval: Double = 2.0
 
     private var character: CharacterNode?
-    private var backgroundLayers: [ParallaxBackground.Layer] = []
+    private var sceneryLayers: [ParallaxBackground.SceneryLayer] = []
     private var landmarkNodes: [String: SKNode] = [:]
 
     private var lastUpdateTime: TimeInterval?
@@ -63,7 +63,7 @@ public final class GameScene: SKScene {
     }
 
     private func buildScene() {
-        backgroundLayers = ParallaxBackground.build(in: self, size: size)
+        sceneryLayers = ParallaxBackground.build(in: self, size: size)
 
         // ADR-009：角色固定於畫面左側、原地走路，不再左右 roam。
         let screenX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))
@@ -140,11 +140,19 @@ public final class GameScene: SKScene {
         onStateChanged?(gameState)
     }
 
-    /// 依 `WorldScroll` 把里程換算成各層捲動偏移與地標螢幕位置。
+    /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置。
+    /// 天空/草地為固定滿版填充，不在此捲動（`08` §4b）。
     private func applyWorldScroll(distance: Double) {
-        for layer in backgroundLayers {
-            let offset = WorldScroll.scrollOffset(forDistance: distance, layerFactor: layer.layerFactor)
-            layer.node.position.x = CGFloat(layer.baseX + offset)
+        for layer in sceneryLayers {
+            for entry in layer.nodes {
+                let x = WorldScroll.wrappedX(
+                    baseX: entry.baseX,
+                    distance: distance,
+                    layerFactor: layer.layerFactor,
+                    span: layer.span
+                )
+                entry.node.position.x = CGFloat(x)
+            }
         }
 
         let anchorX = WorldScroll.characterScreenX(sceneWidth: Double(size.width))

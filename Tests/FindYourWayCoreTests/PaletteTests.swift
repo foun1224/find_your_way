@@ -36,4 +36,9 @@ final class PaletteTests: XCTestCase {
         XCTAssertEqual(Palette.cloudCream, Palette.parseHex("#F5EFE0"))
         XCTAssertEqual(Palette.inkUmber, Palette.parseHex("#3A3330"))
     }
+
+    func testSceneryContrastColors() {
+        XCTAssertEqual(Palette.pineShadow, Palette.parseHex("#4C8054"))
+        XCTAssertEqual(Palette.trailOchre, Palette.parseHex("#C9A36B"))
+    }
 }

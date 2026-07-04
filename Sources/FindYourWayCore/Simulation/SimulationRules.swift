@@ -7,9 +7,10 @@ import Foundation
 /// **禁止**在別處另開一條「前景加速 / 前景額外獎勵」的計算路徑。
 public struct SimulationRules: Equatable {
 
-    /// 預設推進速率（旅程單位/秒）。集中於此，方便依 §7 P1 手感調整。
-    /// 數值本身無意義（抽象單位，`08` §7 P2），只有相對節奏（見 `Landmark.all` 間距）重要。
-    public static let defaultSpeed: Double = 1.0
+    /// 預設推進速率（旅程單位/秒，1 單位≈1pt）。集中於此，方便依 §7 P1 手感調整。
+    /// `08` §4b provisional：由 1 調到 12 —— 現場看是「悠閒但清楚可見」的散步（緩慢平移、不焦躁、非靜止）。
+    /// **線上=離線同速**仍由本單一來源保證（ADR-005 / 紅線六）。使用者反應後再調。
+    public static let defaultSpeed: Double = 12.0
 
     public let speed: Double
 
