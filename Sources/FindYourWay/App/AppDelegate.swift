@@ -18,14 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let saveStore = SaveStore(paths: SavePaths())
     private let preferencesStore = PreferencesStore()
 
-    private var idleCheckTimer: Timer?
     private var lastSaveTime: Double = 0
 
     /// `08` §7 P7 provisional：存檔節流每 ~2 分鐘 + 關鍵時機（離線結算後 / terminate / sleep）。
     private let saveThrottleInterval: Double = 120
-
-    /// 省電（`08` §8.2）：使用者閒置超過此秒數視為「靜止」，暫停 render。
-    private let idleThreshold: Double = 60
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let screen = NSScreen.main
@@ -96,30 +92,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastSaveTime = now
     }
 
-    // MARK: - 省電：靜止即 isPaused（`08` §8.2，R1 顯示底噪偏高，故必做）
+    // MARK: - 省電：只在「確定看不到」時暫停（`08` §8.2b）
+    //
+    // 桌寵本質是「陪在身旁、可被看著」——**看 ≠ 輸入**。舊版以鍵鼠閒置（`CGEventSource`）判定
+    // 靜止並凍結畫面，會把「使用者只是在看桌寵」誤判成離開而凍結（使用者回報「後面都不動了」）。
+    // 修正：移除鍵鼠閒置暫停；只在系統睡眠 / 螢幕睡眠 / 被隱藏（確定看不到）時暫停省電。
 
     private func setUpPowerObservers() {
-        NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+
+        // 系統睡眠 / 喚醒（既有，不動）。
+        center.addObserver(
             self,
             selector: #selector(handleWillSleep),
             name: NSWorkspace.willSleepNotification,
             object: nil
         )
-        NSWorkspace.shared.notificationCenter.addObserver(
+        center.addObserver(
             self,
             selector: #selector(handleDidWake),
             name: NSWorkspace.didWakeNotification,
             object: nil
         )
 
-        // 低頻檢查系統閒置時間（距上次滑鼠/鍵盤事件多久），取代逐幀輪詢：
-        // 閒置超過門檻 → 暫停 render（`scene.isPaused = true`）；有活動時恢復。
-        let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
-            self?.checkIdleAndUpdatePauseState()
-        }
-        timer.tolerance = 5
-        RunLoop.main.add(timer, forMode: .common)
-        idleCheckTimer = timer
+        // 螢幕睡眠 / 喚醒（`08` §8.2b 新增）：螢幕關了＝確定看不到 → 暫停省電。
+        center.addObserver(
+            self,
+            selector: #selector(handleScreensDidSleep),
+            name: NSWorkspace.screensDidSleepNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleScreensDidWake),
+            name: NSWorkspace.screensDidWakeNotification,
+            object: nil
+        )
     }
 
     @objc private func handleWillSleep() {
@@ -134,17 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gameScene?.resumeWithCatchUp()
     }
 
-    private func checkIdleAndUpdatePauseState() {
-        guard let scene = gameScene else { return }
-        let idleSeconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
-        let shouldPause = idleSeconds >= idleThreshold
-
-        if shouldPause {
-            scene.isPaused = true
-        } else if scene.isPaused {
-            // 閒置→活動：解除暫停時走 capped 補算，而非單純 isPaused=false（避免大 dt 尖峰重複補算）。
-            scene.resumeWithCatchUp()
+    @objc private func handleScreensDidSleep() {
+        gameScene?.isPaused = true
+        if let state = gameScene?.gameState {
+            saveStore.save(state)
         }
+    }
+
+    @objc private func handleScreensDidWake() {
+        gameScene?.resumeWithCatchUp()
     }
 
     // MARK: - 選單列動作
@@ -152,9 +158,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func toggleVisibility() {
         guard let window = petWindow else { return }
         if window.isVisible {
+            // 隱藏＝確定看不到 → 暫停省電（`08` §8.2b）。
             window.orderOut(nil)
+            gameScene?.isPaused = true
         } else {
             window.showWithoutActivating()
+            // 重新可見：走 capped 補算恢復（與睡眠喚醒同路徑），而非單純 isPaused=false。
+            gameScene?.resumeWithCatchUp()
         }
     }
 
