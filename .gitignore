@@ -6,3 +6,7 @@ xcuserdata/
 
 # 生成的佔位 icon（build_app.sh 由 make_placeholder_icon.py 重生）
 Resources/AppIcon.icns
+
+# Phase 4 生成的美術產出（slice_assets.py / gen_sprite.py 重生）
+design/samples/*.png
+Resources/art/
