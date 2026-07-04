@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-05 — Session 1（夜間自主）— 美術大改版 Wave 1–3
+
+使用者重整全套素材（8 地域 + 主角 + 20 種居民，皆 1536×1024 照 `20` 規格）就寢，授權自主執行+自我驗證。計畫見 `21_ASSET_OVERHAUL_PLAN.md`。
+- **Wave1（1e5c36d）**：主角改 `main_role`（綠斗篷遊俠，右3+前3幀、真走路循環）、旅伴改 `resource_v2` 女冒險者（8幀）、grassland 取代 meadow。**Fable 自驗抓修殘留幀 bug**（舊 right_3/4 混入）+ slice_assets 重切前清 numbered 幀。
+- **Wave2（ea212bf）**：重切 kingdom(新1536×1024) + 切 valley/village_2/village_3/sky_village/sky_city → **8 地域循環** `[grassland,village2,valley,kingdom,village3,seaCity,skyVillage,skyCity]`，blend 通用。
+- **Wave3（7acfa2b）**：切 17 種居民 NPC→共享 `npc/`，`KingdomNpcScatter`→`RegionNpcScatter` 泛用化、依 `21`§3 分地域配置。
+- **design 素材入版控（791042b）**：全套原始圖供 slice 重建；廢 kingdom_characters。
+- 測試 **249/249 綠**。自我驗證＝build/test + 直讀切圖（螢幕整夜睡、無法截圖）：主角/旅伴/8地域far/多個道具/NPC 皆直讀確認乾淨、暖調無黑暗、高品質。
+
+**待使用者醒來**：GUI 實看（新主角在各地域走路、滿街 NPC）；螢幕醒時 Fable 補截圖。
+**已知小瑕（可優化）**：部分地域 far 左上角標籤補丁殘跡（同既有取捨）；主角 3 姿勢走路仍非真左右交替（可改用 resource_v2 男完整走路幀）；stale `regions/meadow` 已清。
+**Wave 4（延後，需使用者視覺確認+設計決策）**：sky_city 夜間版(`sky_city_magic_night.png`)聯動晝夜（風險：與晝夜 tint 疊加恐雙重變暗，須實看調校）；resource_v2 補充道具；主角男/女可選。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Stage B 王國地域 + 動畫 a11y 審視
 
 - **Stage B（0574cb8）**：使用者提供 `design/kingdom.png`（中古王國首都素材）→ 接成第二地域。slice_assets 切王國 bg(far/mid/fore/ground)+props；Region meadow↔kingdom 交替(regionLength 172800)+blend(atDistance) crossfade 純函式；ParallaxBackground.buildRegion+GameScene 地域編排(crossfade 合成不透空)；FYW_DEBUG_REGION。Fable 截圖驗收：王國畫面與草原風格一致、邊界 50/50 crossfade。234 綠。
