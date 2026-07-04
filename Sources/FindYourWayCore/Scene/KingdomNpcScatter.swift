@@ -37,10 +37,14 @@ public enum KingdomNpcScatter {
     /// 依地域挑選 NPC 槽位表：只有王國有市民，其餘地域回傳空陣列（`18` §3 / `19` §3 同款
     /// 「依地域選池」保底邏輯，只是保底是「沒有」而非退回另一張表——草原是空曠原野、
     /// 海城本階段無角色列可切（`19` §0/§1），都不該無中生有冒出行人）。
+    /// 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4）新增的 5 個地域
+    /// （village2/valley/village3/skyVillage/skyCity）本波刻意不做 NPC（Wave 3 範圍），
+    /// 槽位表暫時留空，沿用同一份「沒有就是沒有」保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
         case .kingdom: return kingdomSlots
         case .meadowOrigin, .riverlands, .highlands, .coastalReach, .seaCity: return []
+        case .village2, .valley, .village3, .skyVillage, .skyCity: return []
         }
     }
 

@@ -28,6 +28,16 @@ final class KingdomNpcScatterTests: XCTestCase {
         XCTAssertTrue(KingdomNpcScatter.slots(for: .seaCity).isEmpty, "海城本階段無角色列可切，不該冒出市民（`19` §1/§3）")
     }
 
+    /// 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4）新增的 5 個地域本波刻意不做 NPC
+    /// （Wave 3 範圍），驗證它們也回傳空陣列，不會無中生出行人。
+    func testNewWave2RegionsHaveNoNpcsYet() {
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .village2).isEmpty)
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .valley).isEmpty)
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .village3).isEmpty)
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .skyVillage).isEmpty)
+        XCTAssertTrue(KingdomNpcScatter.slots(for: .skyCity).isEmpty)
+    }
+
     func testScreenXIsDeterministicForSameDistance() {
         guard let slot = KingdomNpcScatter.kingdomSlots.first else {
             return XCTFail("預期至少有一個槽位")

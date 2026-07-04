@@ -1,9 +1,16 @@
 import XCTest
 @testable import FindYourWayCore
 
-/// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5：
-/// meadow→kingdom→seaCity 三地域循環、邊界正確、Blend Zone crossfade 純函式（三對相鄰邊界都要正確）。
+/// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5 + 美術大改版第 2 波
+/// `21_ASSET_OVERHAUL_PLAN.md` §2：8 地域循環（grassland→village2→valley→kingdom→
+/// village3→seaCity→skyVillage→skyCity→回到 grassland）、邊界正確、Blend Zone crossfade
+/// 純函式（8 對相鄰邊界都要正確）。
 final class RegionTests: XCTestCase {
+
+    /// `21` §2 上線序列，供以下測試逐一走過（比逐一手寫 8 個 case 更不容易漏掉某對邊界）。
+    private static let expectedCycle: [RegionType] = [
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .seaCity, .skyVillage, .skyCity,
+    ]
 
     func testDistanceZeroIsFirstRegion() {
         XCTAssertEqual(Region.at(distance: 0), .meadowOrigin)
@@ -15,20 +22,28 @@ final class RegionTests: XCTestCase {
         }
     }
 
-    func testCyclesThroughMeadowKingdomSeaCity() {
+    func testCyclesThroughAllEightRegionsInOrder() {
         let length = Region.regionLength
-        XCTAssertEqual(Region.at(distance: length - 1), .meadowOrigin)
-        XCTAssertEqual(Region.at(distance: length), .kingdom)
-        XCTAssertEqual(Region.at(distance: length * 2), .seaCity)
-        XCTAssertEqual(Region.at(distance: length * 3), .meadowOrigin)
-        XCTAssertEqual(Region.at(distance: length * 4), .kingdom)
-        XCTAssertEqual(Region.at(distance: length * 5), .seaCity)
+        let cycle = Self.expectedCycle
+        XCTAssertEqual(cycle.count, 8, "8 地域循環（`21` §2），這裡先確認測試本身沒寫錯數量")
+
+        // 走兩輪（16 個 band），確認每個 band 都落在預期地域、且能無縫接回第一輪。
+        for round in 0..<2 {
+            for (offset, expected) in cycle.enumerated() {
+                let bandIndex = round * cycle.count + offset
+                let distance = length * Double(bandIndex) + length / 2 // band 中段，避開邊界 blend zone
+                XCTAssertEqual(
+                    Region.at(distance: distance), expected,
+                    "band \(bandIndex)（第 \(round) 輪第 \(offset) 個）應為 \(expected)"
+                )
+            }
+        }
     }
 
-    func testCyclesBackToFirstRegionAfterThreeBands() {
+    func testCyclesBackToFirstRegionAfterEightBands() {
         let length = Region.regionLength
-        XCTAssertEqual(Region.at(distance: length * 3), .meadowOrigin)
-        XCTAssertEqual(Region.at(distance: length * 6), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 8), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 16), .meadowOrigin)
     }
 
     func testBandIndexMatchesFloorDivision() {
@@ -59,67 +74,34 @@ final class RegionTests: XCTestCase {
         XCTAssertEqual(blend.t, 0)
     }
 
-    func testBlendProgressesFromZeroToOneAcrossMeadowToKingdomBoundary() {
+    /// 8 地域循環的每一對相鄰邊界（含「回到第一個地域」那對）都要 crossfade 正確——
+    /// 逐一手寫 8 份幾乎一樣的測試容易漏掉某一對，改成走過 `expectedCycle` 的資料驅動版本
+    /// （比手寫 8 份更完整、也更不容易漏測）。
+    func testBlendProgressesFromZeroToOneAcrossEveryAdjacentBoundary() {
         let length = Region.regionLength
         let halfWidth = Region.blendWidth / 2.0
-        let boundary = length
+        let cycle = Self.expectedCycle
 
-        let enter = Region.blend(atDistance: boundary - halfWidth)
-        XCTAssertEqual(enter.from, .meadowOrigin)
-        XCTAssertEqual(enter.to, .kingdom)
-        XCTAssertEqual(enter.t, 0, accuracy: 1e-9)
+        for bandIndex in 1...cycle.count {
+            let from = cycle[(bandIndex - 1) % cycle.count]
+            let to = cycle[bandIndex % cycle.count]
+            let boundary = length * Double(bandIndex)
 
-        let mid = Region.blend(atDistance: boundary)
-        XCTAssertEqual(mid.from, .meadowOrigin)
-        XCTAssertEqual(mid.to, .kingdom)
-        XCTAssertEqual(mid.t, 0.5, accuracy: 1e-9)
+            let enter = Region.blend(atDistance: boundary - halfWidth)
+            XCTAssertEqual(enter.from, from, "邊界 \(bandIndex) 進入點 from 錯誤")
+            XCTAssertEqual(enter.to, to, "邊界 \(bandIndex) 進入點 to 錯誤")
+            XCTAssertEqual(enter.t, 0, accuracy: 1e-9)
 
-        let exit = Region.blend(atDistance: boundary + halfWidth)
-        XCTAssertEqual(exit.from, .meadowOrigin)
-        XCTAssertEqual(exit.to, .kingdom)
-        XCTAssertEqual(exit.t, 1, accuracy: 1e-9)
-    }
+            let mid = Region.blend(atDistance: boundary)
+            XCTAssertEqual(mid.from, from, "邊界 \(bandIndex) 中點 from 錯誤")
+            XCTAssertEqual(mid.to, to, "邊界 \(bandIndex) 中點 to 錯誤")
+            XCTAssertEqual(mid.t, 0.5, accuracy: 1e-9)
 
-    func testBlendProgressesFromZeroToOneAcrossKingdomToSeaCityBoundary() {
-        let length = Region.regionLength
-        let halfWidth = Region.blendWidth / 2.0
-        let boundary = length * 2
-
-        let enter = Region.blend(atDistance: boundary - halfWidth)
-        XCTAssertEqual(enter.from, .kingdom)
-        XCTAssertEqual(enter.to, .seaCity)
-        XCTAssertEqual(enter.t, 0, accuracy: 1e-9)
-
-        let mid = Region.blend(atDistance: boundary)
-        XCTAssertEqual(mid.from, .kingdom)
-        XCTAssertEqual(mid.to, .seaCity)
-        XCTAssertEqual(mid.t, 0.5, accuracy: 1e-9)
-
-        let exit = Region.blend(atDistance: boundary + halfWidth)
-        XCTAssertEqual(exit.from, .kingdom)
-        XCTAssertEqual(exit.to, .seaCity)
-        XCTAssertEqual(exit.t, 1, accuracy: 1e-9)
-    }
-
-    func testBlendProgressesFromZeroToOneAcrossSeaCityToMeadowBoundary() {
-        let length = Region.regionLength
-        let halfWidth = Region.blendWidth / 2.0
-        let boundary = length * 3
-
-        let enter = Region.blend(atDistance: boundary - halfWidth)
-        XCTAssertEqual(enter.from, .seaCity)
-        XCTAssertEqual(enter.to, .meadowOrigin)
-        XCTAssertEqual(enter.t, 0, accuracy: 1e-9)
-
-        let mid = Region.blend(atDistance: boundary)
-        XCTAssertEqual(mid.from, .seaCity)
-        XCTAssertEqual(mid.to, .meadowOrigin)
-        XCTAssertEqual(mid.t, 0.5, accuracy: 1e-9)
-
-        let exit = Region.blend(atDistance: boundary + halfWidth)
-        XCTAssertEqual(exit.from, .seaCity)
-        XCTAssertEqual(exit.to, .meadowOrigin)
-        XCTAssertEqual(exit.t, 1, accuracy: 1e-9)
+            let exit = Region.blend(atDistance: boundary + halfWidth)
+            XCTAssertEqual(exit.from, from, "邊界 \(bandIndex) 離開點 from 錯誤")
+            XCTAssertEqual(exit.to, to, "邊界 \(bandIndex) 離開點 to 錯誤")
+            XCTAssertEqual(exit.t, 1, accuracy: 1e-9)
+        }
     }
 
     func testBlendIsMonotonicWithinZone() {

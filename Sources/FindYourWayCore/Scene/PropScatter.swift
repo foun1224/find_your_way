@@ -43,23 +43,107 @@ public enum PropScatter {
         Slot(baseX: 870, propName: "monolith"),
     ]
 
-    /// 王國首都地域槽位表（`18` §1/§3，`19_STAGE_C_SPEC.md` §1 王國環境重切後更新）：
-    /// 道具池換成新版 `design/kingdom.png` 道具列實際切出的王國道具（`regions/kingdom/props/`）。
-    /// 舊版（`bench`/`signpost`/`market_stall`/`statue`/`tree`/`fountain`/`potted_flower`）已隨
-    /// Stage C 重切作廢——新 kingdom.png 的道具列裡沒有這些物件，繼續引用會讀到 Stage B 遺留的
-    /// 舊風格靜態檔案（未隨新素材重切、風格不搭），因此全面換成新素材表實際切出的 10 種道具。
+    /// 王國首都地域槽位表（`18` §1/§3 → `19_STAGE_C_SPEC.md` §1 → 美術大改版第 2 波
+    /// `21_ASSET_OVERHAUL_PLAN.md` §4 再次重切）：道具池換成新版 1536x1024
+    /// `design/kingdom.png` 道具列實際切出的王國道具（`regions/kingdom/props/`）。
+    /// 舊版（`fence_low`/`crate_reinforced`/`fence`/`planter`）已隨本波重切作廢——新版
+    /// kingdom.png 的道具列裡沒有這些物件，繼續引用會讀不到檔案（優雅降級為不顯示、
+    /// 但畫面會少道具），因此全面換成新素材表實際切出的 11 種道具。
     /// 間距手法同 `slots`（確定性、依 `baseX` 遞增排列，均勻散佈在同一個 `span` 週期內）。
     public static let kingdomSlots: [Slot] = [
-        Slot(baseX: 40, propName: "lamppost"),
-        Slot(baseX: 122, propName: "planter"),
-        Slot(baseX: 204, propName: "pillar"),
-        Slot(baseX: 286, propName: "fence_low"),
-        Slot(baseX: 368, propName: "banner"),
-        Slot(baseX: 450, propName: "crate"),
-        Slot(baseX: 532, propName: "crate_reinforced"),
-        Slot(baseX: 614, propName: "barrel"),
-        Slot(baseX: 696, propName: "fence"),
-        Slot(baseX: 778, propName: "cart"),
+        Slot(baseX: 40, propName: "banner"),
+        Slot(baseX: 115, propName: "lamppost"),
+        Slot(baseX: 190, propName: "tree"),
+        Slot(baseX: 265, propName: "lion"),
+        Slot(baseX: 340, propName: "fountain"),
+        Slot(baseX: 415, propName: "cart"),
+        Slot(baseX: 490, propName: "crate"),
+        Slot(baseX: 565, propName: "angel"),
+        Slot(baseX: 640, propName: "signboard"),
+        Slot(baseX: 715, propName: "pillar"),
+        Slot(baseX: 790, propName: "dome"),
+    ]
+
+    /// 山谷地域槽位表（美術大改版第 2 波 `21` §2/§4）：道具池為 `regions/valley/props/`
+    /// （奇幻科技風：發光膠囊/螢幕看板/浮空平台等），間距手法同 `slots`。
+    public static let valleySlots: [Slot] = [
+        Slot(baseX: 40, propName: "tree"),
+        Slot(baseX: 115, propName: "lamppost"),
+        Slot(baseX: 190, propName: "capsule"),
+        Slot(baseX: 265, propName: "screen_panel"),
+        Slot(baseX: 340, propName: "market_stall"),
+        Slot(baseX: 415, propName: "planter"),
+        Slot(baseX: 490, propName: "crate_chest"),
+        Slot(baseX: 565, propName: "signpost_neon"),
+        Slot(baseX: 640, propName: "floating_orb"),
+        Slot(baseX: 715, propName: "hanging_frame"),
+        Slot(baseX: 790, propName: "screen_skull"),
+    ]
+
+    /// 村莊 A 地域槽位表（美術大改版第 2 波）：道具池為 `regions/village_2/props/`
+    /// （田園河谷村落：市集攤車/水井/柵欄等），間距手法同 `slots`。
+    public static let village2Slots: [Slot] = [
+        Slot(baseX: 40, propName: "tree"),
+        Slot(baseX: 115, propName: "signpost"),
+        Slot(baseX: 190, propName: "lamppost"),
+        Slot(baseX: 265, propName: "bench"),
+        Slot(baseX: 340, propName: "market_stall"),
+        Slot(baseX: 415, propName: "barrel"),
+        Slot(baseX: 490, propName: "crate"),
+        Slot(baseX: 565, propName: "planter"),
+        Slot(baseX: 640, propName: "well"),
+        Slot(baseX: 715, propName: "pedestal_planter"),
+        Slot(baseX: 790, propName: "fence"),
+    ]
+
+    /// 村莊 B 地域槽位表（美術大改版第 2 波）：道具池為 `regions/village_3/props/`
+    /// （森林樹屋村落：蘑菇樹墩燈/繩橋/水晶井等），間距手法同 `slots`。
+    public static let village3Slots: [Slot] = [
+        Slot(baseX: 40, propName: "tree"),
+        Slot(baseX: 115, propName: "lamppost"),
+        Slot(baseX: 190, propName: "signpost"),
+        Slot(baseX: 265, propName: "bench"),
+        Slot(baseX: 340, propName: "market_stall"),
+        Slot(baseX: 415, propName: "barrel"),
+        Slot(baseX: 490, propName: "crate"),
+        Slot(baseX: 565, propName: "planter"),
+        Slot(baseX: 640, propName: "stump_lantern"),
+        Slot(baseX: 715, propName: "bridge"),
+        Slot(baseX: 790, propName: "crystal_well"),
+    ]
+
+    /// 天空村莊地域槽位表（美術大改版第 2 波）：道具池為 `regions/sky_village/props/`
+    /// （浮空平台迴廊：噴泉/飛船/水晶柱等），間距手法同 `slots`。
+    public static let skyVillageSlots: [Slot] = [
+        Slot(baseX: 40, propName: "tree"),
+        Slot(baseX: 108, propName: "pillar"),
+        Slot(baseX: 176, propName: "lamppost"),
+        Slot(baseX: 244, propName: "signpost"),
+        Slot(baseX: 312, propName: "planter"),
+        Slot(baseX: 380, propName: "fountain"),
+        Slot(baseX: 448, propName: "crate"),
+        Slot(baseX: 516, propName: "barrel"),
+        Slot(baseX: 584, propName: "banner_post"),
+        Slot(baseX: 652, propName: "airship"),
+        Slot(baseX: 720, propName: "crystal_pillar"),
+        Slot(baseX: 788, propName: "fence"),
+    ]
+
+    /// 天空魔法城地域槽位表（美術大改版第 2 波）：道具池為 `regions/sky_city/props/`
+    /// （金色魔法水晶城：魔法鏡/寶箱/魔法拱門等），間距手法同 `slots`。
+    public static let skyCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "crystal_fountain"),
+        Slot(baseX: 108, propName: "pillar"),
+        Slot(baseX: 176, propName: "banner_post"),
+        Slot(baseX: 244, propName: "lamp"),
+        Slot(baseX: 312, propName: "planter"),
+        Slot(baseX: 380, propName: "market_stall"),
+        Slot(baseX: 448, propName: "mirror"),
+        Slot(baseX: 516, propName: "chest"),
+        Slot(baseX: 584, propName: "crystal"),
+        Slot(baseX: 652, propName: "signpost"),
+        Slot(baseX: 720, propName: "airship"),
+        Slot(baseX: 788, propName: "gate"),
     ]
 
     /// 港口海城地域槽位表（`19_STAGE_C_SPEC.md` §1/§3，第三地域）：道具池換成
@@ -85,6 +169,11 @@ public enum PropScatter {
         case .kingdom: return kingdomSlots
         case .seaCity: return seaCitySlots
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return slots
+        case .village2: return village2Slots
+        case .valley: return valleySlots
+        case .village3: return village3Slots
+        case .skyVillage: return skyVillageSlots
+        case .skyCity: return skyCitySlots
         }
     }
 

@@ -194,19 +194,26 @@ public final class GameScene: SKScene {
         }
     }
 
-    /// `FYW_DEBUG_REGION`（`meadow`/`kingdom`/`sea_city`，海城也接受 `seacity` 別名）：
-    /// 強制指定地域，方便 Fable 截圖三地域畫面不必真的走 8h（`18_STAGE_B_SPEC.md` §4 /
-    /// `19_STAGE_C_SPEC.md` §4）。只影響「一開始顯示哪個地域」；不指定時照常依
-    /// `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
+    /// `FYW_DEBUG_REGION`：強制指定地域，方便 Fable 截圖不必真的走完整段旅程
+    /// （`18_STAGE_B_SPEC.md` §4 / `19_STAGE_C_SPEC.md` §4）。只影響「一開始顯示哪個地域」；
+    /// 不指定時照常依 `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
     /// 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：`meadowOrigin` 的美術資源夾
     /// 已改成 `"grassland"`（見 `RegionType.assetFolder`），故也接受 `"grassland"` 別名，
     /// 方便 Fable 截圖時直接用新名稱；`"meadow"` 仍保留（`RegionType` case 名稱本身沒變）。
+    /// 美術大改版第 2 波（`21` §4）：8 地域循環新增的 5 個地域，皆接受其
+    /// `assetFolder` 名稱（`village_2`/`valley`/`village_3`/`sky_village`/`sky_city`），
+    /// 也各自接受一個駝峰別名，方便直接用 `RegionType` case 名稱呼叫。
     private static func debugRegionOverride() -> RegionType? {
         guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_REGION"] else { return nil }
         switch raw.lowercased() {
         case "meadow", "grassland": return .meadowOrigin
         case "kingdom": return .kingdom
         case "sea_city", "seacity": return .seaCity
+        case "village_2", "village2": return .village2
+        case "valley": return .valley
+        case "village_3", "village3": return .village3
+        case "sky_village", "skyvillage": return .skyVillage
+        case "sky_city", "skycity", "sky_city_magic": return .skyCity
         default: return nil
         }
     }

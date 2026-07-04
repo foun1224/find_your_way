@@ -94,4 +94,39 @@ final class PropScatterTests: XCTestCase {
     func testSlotsForRegionPicksSeaCityPool() {
         XCTAssertEqual(PropScatter.slots(for: .seaCity), PropScatter.seaCitySlots)
     }
+
+    // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）
+
+    /// 逐一驗證 5 個新地域槽位表的基本不變量（同 `testKingdomSlotsAreWithinSpanAndSortedAndNonEmpty`/
+    /// `testSeaCitySlotsAreWithinSpanAndSortedAndNonEmpty` 手法），資料驅動避免 5 份幾乎重複的測試。
+    func testNewRegionSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let tables: [(String, [PropScatter.Slot])] = [
+            ("valley", PropScatter.valleySlots),
+            ("village2", PropScatter.village2Slots),
+            ("village3", PropScatter.village3Slots),
+            ("skyVillage", PropScatter.skyVillageSlots),
+            ("skyCity", PropScatter.skyCitySlots),
+        ]
+        for (name, slots) in tables {
+            let baseXs = slots.map(\.baseX)
+            XCTAssertEqual(baseXs, baseXs.sorted(), "\(name) 槽位表應依 baseX 遞增排列")
+            XCTAssertFalse(slots.isEmpty, "\(name) 槽位表不應為空")
+            for i in 1..<baseXs.count {
+                XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "\(name) 相鄰槽位不可重疊")
+            }
+            for slot in slots {
+                XCTAssertGreaterThanOrEqual(slot.baseX, 0, "\(name) baseX 不可為負")
+                XCTAssertLessThan(slot.baseX, PropScatter.span, "\(name) baseX 需落在 span 內")
+                XCTAssertFalse(slot.propName.isEmpty, "\(name) propName 不可為空")
+            }
+        }
+    }
+
+    func testSlotsForRegionPicksEachOfTheFiveNewRegionPools() {
+        XCTAssertEqual(PropScatter.slots(for: .valley), PropScatter.valleySlots)
+        XCTAssertEqual(PropScatter.slots(for: .village2), PropScatter.village2Slots)
+        XCTAssertEqual(PropScatter.slots(for: .village3), PropScatter.village3Slots)
+        XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageSlots)
+        XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCitySlots)
+    }
 }

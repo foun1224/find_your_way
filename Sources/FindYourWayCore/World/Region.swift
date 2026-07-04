@@ -1,9 +1,11 @@
 import Foundation
 
 /// Region skeleton（`16_STAGE_A_SPEC.md` §2.3b，Stage B 擴充見 `18_STAGE_B_SPEC.md` §2，
-/// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2）：薄骨架，為地域美術預留掛點。
-/// `riverlands`/`highlands` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 `meadowOrigin` → `kingdom` → `seaCity` 三地域循環**。
+/// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
+/// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
+/// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
+/// **目前上線的序列是 8 地域循環**（`21` §2）：
+/// `grassland → village2 → valley → kingdom → village3 → seaCity → skyVillage → skyCity`。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -12,12 +14,24 @@ public enum RegionType: Equatable, CaseIterable {
     case coastalReach
     case kingdom
     case seaCity
+    /// 村莊 A（`design/village_2.png`，田園河谷村落：風車/石橋/市集），美術大改版第 2 波新增。
+    case village2
+    /// 山谷（`design/valley.png`，浮空峽谷奇幻科技風），美術大改版第 2 波新增。
+    case valley
+    /// 村莊 B（`design/village_3.png`，森林樹屋村落），美術大改版第 2 波新增。
+    case village3
+    /// 天空村莊（`design/sky_village.png`，浮空平台迴廊），美術大改版第 2 波新增。
+    case skyVillage
+    /// 天空魔法城（`design/sky_city_magic.png`，金色魔法水晶城），美術大改版第 2 波新增。
+    case skyCity
 
-    /// Stage C 上線序列（`19` §2）：meadow → kingdom → seaCity 三個有美術的地域循環；
-    /// 其餘骨架 case 保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
-    /// `coastalReach` 骨架 case 沿用既有命名保留給未來地域，跟新上線的 `seaCity`（港口海城，
-    /// 有實際美術）是兩個不同的 case，避免語意混淆、也不影響既有測試對骨架 case 的引用。
-    private static let cycle: [RegionType] = [.meadowOrigin, .kingdom, .seaCity]
+    /// 美術大改版第 2 波上線序列（`21` §2）：8 地域循環，旅程節奏由近人到奇幻——
+    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 海城 → 天空村莊 → 天空魔法城 → （回到草原）。
+    /// 其餘骨架 case（riverlands/highlands/coastalReach）保留給未來地域，暫不進入
+    /// `at(bandIndex:)` 的循環。
+    private static let cycle: [RegionType] = [
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .seaCity, .skyVillage, .skyCity,
+    ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
         let count = cycle.count
@@ -25,10 +39,11 @@ public enum RegionType: Equatable, CaseIterable {
         return cycle[normalized]
     }
 
-    /// 地域對應的美術資源夾名稱（`Resources/art/regions/<name>/`，`18` §1 / `19` §1）：
-    /// `ParallaxBackground`/`PropScatter` 依此挑該地域的背景/地面/道具。尚無美術的骨架地域
-    /// （riverlands/highlands/coastalReach）暫時歸類回 grassland 資源夾；`Region.at` 目前不會選到
-    /// 它們（`cycle` 只有 meadowOrigin/kingdom/seaCity），這裡只是保底、避免未來誤用時找不到資源夾。
+    /// 地域對應的美術資源夾名稱（`Resources/art/regions/<name>/`，`18` §1 / `19` §1 /
+    /// `21` §4）：`ParallaxBackground`/`PropScatter` 依此挑該地域的背景/地面/道具。
+    /// 尚無美術的骨架地域（riverlands/highlands/coastalReach）暫時歸類回 grassland 資源夾；
+    /// `Region.at` 目前不會選到它們（`cycle` 不含這三個），這裡只是保底、避免未來誤用時
+    /// 找不到資源夾。
     ///
     /// **美術大改版第 1 波**（`21_ASSET_OVERHAUL_PLAN.md` §4）：`meadowOrigin` 改指到
     /// `"grassland"`（取代舊 `"meadow"` 資源夾，`design/grassland.png` 切出的新草原美術，
@@ -39,6 +54,11 @@ public enum RegionType: Equatable, CaseIterable {
         case .kingdom: return "kingdom"
         case .seaCity: return "sea_city"
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return "grassland"
+        case .village2: return "village_2"
+        case .valley: return "valley"
+        case .village3: return "village_3"
+        case .skyVillage: return "sky_village"
+        case .skyCity: return "sky_city"
         }
     }
 }

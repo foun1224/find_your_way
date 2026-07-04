@@ -25,6 +25,14 @@ SEA_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sea_city.png")
 MAIN_ROLE_SHEET = os.path.join(REPO_ROOT, "design", "main_role.png")
 RESOURCE_V2_SHEET = os.path.join(REPO_ROOT, "design", "resource_v2.png")
 GRASSLAND_SHEET = os.path.join(REPO_ROOT, "design", "grassland.png")
+# 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4「其餘地域切圖」）：5 個新地域素材表，
+# 皆 1536x1024、與 grassland.png 同款版式（`20_ASSET_SHEET_SPEC.md` 規格：4 層 + 道具列，
+# 每層/道具列左上角疊「遠景/中景/前景/地面平台/道具素材」標籤黑底方框）。
+VALLEY_SHEET = os.path.join(REPO_ROOT, "design", "valley.png")
+VILLAGE_2_SHEET = os.path.join(REPO_ROOT, "design", "village_2.png")
+VILLAGE_3_SHEET = os.path.join(REPO_ROOT, "design", "village_3.png")
+SKY_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "sky_village.png")
+SKY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sky_city_magic.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -533,36 +541,30 @@ BG_MID_TOP_FADE_PX = 22
 
 
 # ---------------------------------------------------------------------------
-# 王國首都座標設定表（Stage C `19_STAGE_C_SPEC.md` §1，由 Read design/kingdom.png 目視 +
-# 逐像素亮度/連通元件掃描校準，1774x887，Fable 提供的更精緻重繪版，取代舊 1536x1024 版本，
-# 座標與舊版完全無法沿用——版面比例不同，重新校準。）
+# 王國首都座標設定表（美術大改版第 2 波，`21_ASSET_OVERHAUL_PLAN.md` §4，由 Read
+# design/kingdom.png 目視 + 逐像素亮度/連通元件掃描校準，新版 1536x1024，取代 Stage C
+# 舊 1774x887 版本——版面/道具完全不同，重新校準，座標與舊版無法沿用。
+# 新版與 grassland.png 同款版式（`20_ASSET_SHEET_SPEC.md`）：四層 y 帶 + 底部道具列，
+# 每層/道具列左上角疊「遠景/中景/前景/地面平台/道具素材」標籤黑底方框。）
 # ---------------------------------------------------------------------------
 
-# 內容左右邊界：新版與舊版不同——整張圖沒有「留白邊界欄」，遠/中/前景場景內容本身
-# 直接畫到左右兩側畫布邊緣（x=0 起到 x=1774 止，逐欄亮度掃描確認左右兩側都是滿版場景色，
-# 不是近黑留白）。但每層左上角疊了一塊「遠景/中景/前景/地面平台」中文標籤黑底方框
-# （蓋在場景內容上，不是獨立留白欄——與舊版留白版式不同），裁完後用 `patch_label_box` 蓋掉
-# （見下方 `KINGDOM_LABEL_BOX_RECTS`），否則水平無縫平鋪時方框會每個 tile 週期性重複出現。
-#
-# 背景四層 y 範圍：以逐像素亮度掃描 + 標籤方框位置交叉校準（方框永遠貼齊自己所屬圖層的
-# 左上角，方框出現的 y 位置＝該圖層的起點附近，比場景內容本身的漸層亮度斷點更可靠）：
-#   遠景（城堡群+河+橋+雲）：      y=0..236（237/238 起亮度陡升，轉中景自己的天空）
-#   中景（藍頂塔樓城牆密城）：    y=237..462（前景標籤方框貼齊 463 起點）
-#   前景（旗幟石牆+燈柱+桶箱車花）：y=463..584（往下漸暗轉地面平台石板的陰影帶）
-#   地面平台（灰石板走道）：      y=585..634（635/636 起陡降轉近黑，是底部道具列畫布）
-KINGDOM_BG_FAR = Region(x=0, y=0, w=1774, h=237)
-KINGDOM_BG_MID = Region(x=0, y=237, w=1774, h=226)
-KINGDOM_BG_FORE = Region(x=0, y=463, w=1774, h=122)
-KINGDOM_BG_GROUND = Region(x=0, y=585, w=1774, h=50)
+# 背景四層 y 範圍（逐像素亮度斷點掃描校準，與 grassland/valley/village_2/village_3/
+# sky_village/sky_city 六張新版素材表共用同一套版面帶——皆由同一模板產生，斷點 y 座標
+# 彼此一致，見 scratchpad 校準紀錄）：
+#   遠景：y=0..233　中景：y=234..451　前景：y=452..665　地面平台：y=666..787
+#   （788 起「道具素材」標籤方框開始疊在道具列畫布上）
+KINGDOM_BG_FAR = Region(x=0, y=0, w=1536, h=234)
+KINGDOM_BG_MID = Region(x=0, y=234, w=1536, h=218)
+KINGDOM_BG_FORE = Region(x=0, y=452, w=1536, h=214)
+KINGDOM_BG_GROUND = Region(x=0, y=666, w=1536, h=122)
 
-# 各層左上角標籤方框（相對於該層裁切後的區域座標，供 `patch_label_box` 蓋掉）：
-# 方框大小/位置在遠景/中景/前景三層一致（同一套 UI 素材），逐層獨立校準。
-# 地面平台層沒有方框——「地面平台」文字方框實際疊在更下面的道具列畫布上（見
-# `KINGDOM_PROP_REGIONS` 校準時的觀察），地面平台裁切範圍本身乾淨、不需要 patch。
+# 各層左上角標籤方框（同 `GRASSLAND_LABEL_BOX_RECTS` 手法，六張新地域素材表版式一致，
+# 沿用同一份方框座標）。
 KINGDOM_LABEL_BOX_RECTS: dict = {
-    "far": Region(x=5, y=14, w=145, h=60),
-    "mid": Region(x=5, y=6, w=145, h=56),
-    "fore": Region(x=5, y=3, w=145, h=50),
+    "far": Region(x=0, y=0, w=150, h=48),
+    "mid": Region(x=0, y=0, w=150, h=48),
+    "fore": Region(x=0, y=0, w=150, h=48),
+    "ground": Region(x=0, y=15, w=115, h=38),
 }
 
 # mid 疊在 far 之前、fore 疊在 mid 之前，皆有小段上緣重疊（`ParallaxBackground` 對應 overlap 常數），
@@ -570,23 +572,40 @@ KINGDOM_LABEL_BOX_RECTS: dict = {
 KINGDOM_BG_MID_TOP_FADE_PX = 18
 KINGDOM_BG_FORE_TOP_FADE_PX = 14
 
-# 道具／互動物件：新版 kingdom.png 底部道具列（y=636..887，近黑色畫布），逐一目視校準座標
-# （先用「欄有無亮於背景像素」做連通分段掃描抓出候選範圍，再逐一裁切 Read 目視確認身份、
-# 命名依實際外觀）。素材表最左側 3 格是牆面/短柱材質色板（非獨立道具，供環境圖層本身使用，
-# 不適合當散落道具——花箱/欄杆之類「有機」道具才需要細部去背，牆材質色板本身就是矩形色塊，
-# 沒有散落擺放的意義），故本表不收錄。範圍刻意留餘裕，去背 + autocrop 後收斂到精確 bounding box。
+# 道具／互動物件：新版 kingdom.png 底部道具列（y=790..1024，近黑色畫布），逐一 Read 裁切
+# 目視 + 逐像素連通分段掃描校準座標（見 scratchpad 校準紀錄）。11 個道具：
+# 旗幟／燈柱／樹／石獅／噴泉／市集推車／木箱+木桶／天使雕像／公告牌／石柱／藍頂小圓頂建築。
+# 範圍刻意留餘裕，去背 + autocrop 後收斂到精確 bounding box。
 KINGDOM_PROP_REGIONS: dict = {
-    "lamppost": Region(x=510, y=636, w=90, h=251),
-    "banner": Region(x=574, y=636, w=132, h=251),
-    "crate": Region(x=696, y=636, w=100, h=251),
-    "barrel": Region(x=785, y=636, w=107, h=251),
-    "cart": Region(x=885, y=636, w=136, h=251),
-    "crate_reinforced": Region(x=1010, y=636, w=140, h=251),
-    "planter": Region(x=1160, y=636, w=110, h=251),
-    "fence": Region(x=1300, y=636, w=172, h=251),
-    "fence_low": Region(x=1461, y=636, w=182, h=251),
-    "pillar": Region(x=1638, y=636, w=106, h=251),
+    "banner": Region(x=5, y=790, w=135, h=234),
+    "lamppost": Region(x=145, y=790, w=100, h=234),
+    "tree": Region(x=248, y=790, w=150, h=234),
+    "lion": Region(x=400, y=790, w=150, h=234),
+    "fountain": Region(x=552, y=790, w=148, h=234),
+    "cart": Region(x=701, y=790, w=160, h=234),
+    "crate": Region(x=863, y=790, w=182, h=234),
+    "angel": Region(x=1045, y=790, w=105, h=234),
+    "signboard": Region(x=1150, y=790, w=108, h=234),
+    "pillar": Region(x=1258, y=790, w=122, h=234),
+    "dome": Region(x=1380, y=790, w=156, h=234),
 }
+
+# 第一個道具（`banner`）與其餘 5 張新地域素材表的第一個道具一樣，裁切區左上角會框到
+# 「道具素材」標籤黑底方框（見 `_GRASSLAND_PROP_EXCLUDE_RECTS` 同款動機），用 exclude rect
+# 蓋掉再去背。
+_KINGDOM_PROP_EXCLUDE_RECTS: dict = {
+    "banner": [Region(x=0, y=0, w=150, h=52)],
+}
+
+# 去雜點策略（同 `_GRASSLAND_DILATED_PROPS` 說明）：細桿件/薄邊框（燈柱、旗幟旗桿、石柱、
+# 公告牌邊框、噴泉裝飾細節、市集推車車輪輻條）用 `keep_largest_component_dilated` 防斷；
+# 其餘本身多個分離部件（樹叢、木箱+木桶組合、天使雕像羽翼、圓頂建築裝飾）用
+# `remove_small_components` 保留分離部件。
+_KINGDOM_DILATED_PROPS = {"banner", "lamppost", "fountain", "cart", "signboard", "pillar"}
+_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA = 30
+
+# 王國道具列畫布背景色（逐像素取樣畫布角落確認，同 `_GRASSLAND_PROP_BG_COLOR` 說明）。
+_KINGDOM_PROP_BG_COLOR = (14, 28, 40)
 
 
 # ---------------------------------------------------------------------------
@@ -740,45 +759,6 @@ def fade_top_edge(img: Image, fade_px: int) -> Image:
     return out
 
 
-# Stage C 新版 kingdom.png 道具（`KINGDOM_PROP_REGIONS`）去雜點策略：
-# - `keep_largest_component`：本體是「單一連通塊」、沒有細長分離部件的道具——燈柱/旗幟/木箱/
-#   木桶/貨車/石柱本體造型雖然有細桿（燈柱柱身、旗幟旗桿、石柱本身），但桿身跟底座/主體像素
-#   相連成一塊，不會被誤判成小雜點清掉，用「只留最大連通塊」最乾淨、順便清掉鄰居道具碎片。
-# - `remove_small_components`（面積門檻，同既有 `slice_props` 手法）：本體「本來就有分離部件」
-#   的道具——花箱（箱體+花叢，花瓣末梢常因去背斷開變小碎塊）、欄杆（扶手柱之間本來就有透空
-#   間隙，是好幾根柱子的集合，不是單一連通塊）——用最大連通塊會誤刪成只剩一根柱子。
-_KINGDOM_LARGEST_COMPONENT_PROPS = {"lamppost", "banner", "crate", "crate_reinforced", "barrel", "cart", "pillar"}
-_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA = 80
-_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES: dict = {}
-
-# 道具列畫布上緣（裁切框相對 y=0..~68）其實是一整條青苔石牆「背板」紋理，橫跨整張素材表
-# 寬度、跟旁邊道具的背板紋理連成同一塊（不是雜點，是刻意畫的展示背板），色彩/亮度都跟真正
-# 道具本體重疊，`chroma_key_flood_color`／`remove_small_components`／`keep_largest_component`
-# 都無法單純用顏色或面積分開它——校準時發現它會被誤判成「最大連通塊」（贏過矮小道具本體）
-# 或以「大於門檻的鄰居碎片」身分留下來。這裡改用最直接的作法：裁切後（去背前）直接把背板所在的
-# 矩形區域填成透明，跟舊版 kingdom.png `signpost`/`tree` 用的 `_apply_exclude_rects` 手法一致。
-# 大多數道具本體全部落在背板下方（不需要背板那段），可以整條清空；只有燈柱的燈頭會伸進背板
-# 高度——燈柱用「左右兩側」exclude rect（保留中間燈頭/燈柱那條窄窗），其餘道具直接整條清空。
-_KINGDOM_PROP_EXCLUDE_RECTS: dict = {
-    "lamppost": [
-        Region(x=0, y=0, w=25, h=70),   # 背板左側
-        Region(x=65, y=0, w=25, h=70),  # 背板右側（中間 x=25..65 留給燈頭/燈柱）
-    ],
-    "banner": [
-        Region(x=0, y=0, w=45, h=45),    # 背板左上角
-        Region(x=90, y=0, w=42, h=45),   # 背板右上角（中間 x=45..90 留給旗桿橫臂/尖頂裝飾）
-    ],
-    "crate": [Region(x=0, y=0, w=100, h=68)],
-    "barrel": [Region(x=0, y=0, w=107, h=68)],
-    "cart": [Region(x=0, y=0, w=136, h=100)],
-    "crate_reinforced": [Region(x=0, y=0, w=140, h=68)],
-    "planter": [Region(x=0, y=0, w=148, h=68)],
-    "fence": [Region(x=0, y=0, w=172, h=68)],
-    "fence_low": [Region(x=0, y=0, w=182, h=68)],
-    "pillar": [Region(x=0, y=0, w=106, h=68)],
-}
-
-
 def _apply_exclude_rects(img: Image, rects: list) -> Image:
     out = Image(img.width, img.height, [row[:] for row in img.pixels])
     for rect in rects:
@@ -815,15 +795,10 @@ def slice_kingdom_npcs(sheet: Image) -> dict:
     return out
 
 
-# 王國道具列畫布背景色（Stage C 新版 kingdom.png，逐像素取樣畫布邊角確認，見 `chroma_key_flood_color`
-# 說明——這張畫布背景是偏藍深灰，亮度已到 ~40，跟不少道具暗部亮度重疊，改用顏色距離去背）。
-_KINGDOM_PROP_BG_COLOR = (31, 42, 54)
-
-
 def slice_kingdom_props(sheet: Image) -> dict:
-    """王國道具切圖：座標表 `KINGDOM_PROP_REGIONS`（`19_STAGE_C_SPEC.md` §1）；
-    去背用 `chroma_key_flood_color`（畫布背景亮度跟部分道具暗部重疊，見其說明）；
-    去雜點/去鄰居碎片策略見 `_KINGDOM_LARGEST_COMPONENT_PROPS` 說明。"""
+    """王國道具切圖（美術大改版第 2 波，新版 1536x1024 kingdom.png）：座標表
+    `KINGDOM_PROP_REGIONS`，流程與 `slice_grassland_props` 相同（`chroma_key_flood_color` +
+    exclude rect 蓋標籤方框 + 依 `_KINGDOM_DILATED_PROPS` 選去雜點策略）。"""
     out = {}
     for name, region in KINGDOM_PROP_REGIONS.items():
         w = min(region.w, sheet.width - region.x)
@@ -831,15 +806,11 @@ def slice_kingdom_props(sheet: Image) -> dict:
         cropped = sheet.crop(region.x, region.y, w, h)
         if name in _KINGDOM_PROP_EXCLUDE_RECTS:
             cropped = _apply_exclude_rects(cropped, _KINGDOM_PROP_EXCLUDE_RECTS[name])
-        keyed = chroma_key_flood_color(cropped, _KINGDOM_PROP_BG_COLOR, threshold=16)
-        if name in _KINGDOM_LARGEST_COMPONENT_PROPS:
-            # 用膨脹連通版而非原始 `keep_largest_component`：細長桿狀部件（燈柱柱身、
-            # 旗桿）在色距去背下可能因陰影處顏色貼近背景而被攔腰挖空，見
-            # `keep_largest_component_dilated` docstring（Stage C QA 發現的燈柱斷桿問題）。
+        keyed = chroma_key_flood_color(cropped, _KINGDOM_PROP_BG_COLOR, threshold=20)
+        if name in _KINGDOM_DILATED_PROPS:
             keyed = keep_largest_component_dilated(keyed, dilate_px=2)
         else:
-            min_area = _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA_OVERRIDES.get(name, _KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA)
-            keyed = remove_small_components(keyed, min_area=min_area)
+            keyed = remove_small_components(keyed, min_area=_KINGDOM_NEIGHBOR_DEBRIS_MIN_AREA)
         out[name] = autocrop(keyed)
     return out
 
@@ -1002,6 +973,176 @@ def slice_grassland_props(sheet: Image) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4「其餘地域切圖」）：5 個新地域
+# valley / village_2 / village_3 / sky_village / sky_city，皆 1536x1024、與
+# grassland.png 完全同款版式（由 Read 逐張目視 + 逐像素亮度/連通元件掃描校準，
+# 見 scratchpad 校準紀錄）——背景四層 y 帶與 `GRASSLAND_BG_*`/`GRASSLAND_LABEL_BOX_RECTS`
+# 完全一致（同一模板產生，斷點 y 座標六張素材表彼此吻合），故共用同一份層 y 帶常數，
+# 只有道具列 x 座標表 + 道具列畫布背景色因每張圖內容不同而各自校準。
+# ---------------------------------------------------------------------------
+
+# 六張新地域素材表（含重切的 kingdom）共用同一套背景層 y 帶（`GRASSLAND_BG_*`）與標籤
+# 方框座標（`GRASSLAND_LABEL_BOX_RECTS`）——直接沿用，不重複定義。
+NEW_REGION_BG_FAR = GRASSLAND_BG_FAR
+NEW_REGION_BG_MID = GRASSLAND_BG_MID
+NEW_REGION_BG_FORE = GRASSLAND_BG_FORE
+NEW_REGION_BG_GROUND = GRASSLAND_BG_GROUND
+NEW_REGION_LABEL_BOX_RECTS = GRASSLAND_LABEL_BOX_RECTS
+NEW_REGION_MID_TOP_FADE_PX = GRASSLAND_BG_MID_TOP_FADE_PX
+NEW_REGION_FORE_TOP_FADE_PX = GRASSLAND_BG_FORE_TOP_FADE_PX
+
+# --- valley（山谷，design/valley.png：高科技/魔法感浮空峽谷——市集推車、玄光膠囊、
+# 螢幕看板等道具帶著奇幻科技風，與其餘地域的中古田園風不同，但仍溫暖無威脅，符合
+# `20_ASSET_SHEET_SPEC.md` §0 世界觀鐵律）道具列座標（11 個道具：樹／燈柱／發光膠囊／
+# 螢幕看板／市集推車／花箱／木箱／霓虹路牌／浮空平台／懸吊木架／骷髏頭螢幕）。
+VALLEY_PROP_REGIONS: dict = {
+    "tree": Region(x=5, y=790, w=165, h=234),
+    "lamppost": Region(x=178, y=790, w=90, h=234),
+    "capsule": Region(x=271, y=790, w=145, h=234),
+    "screen_panel": Region(x=416, y=790, w=150, h=234),
+    "market_stall": Region(x=566, y=790, w=135, h=234),
+    "planter": Region(x=701, y=790, w=134, h=234),
+    "crate_chest": Region(x=835, y=790, w=147, h=234),
+    "signpost_neon": Region(x=982, y=790, w=90, h=234),
+    "floating_orb": Region(x=1072, y=790, w=133, h=234),
+    "hanging_frame": Region(x=1205, y=790, w=150, h=234),
+    "screen_skull": Region(x=1355, y=790, w=181, h=234),
+}
+_VALLEY_PROP_EXCLUDE_RECTS: dict = {"tree": [Region(x=0, y=0, w=150, h=52)]}
+_VALLEY_DILATED_PROPS = {"lamppost", "signpost_neon", "hanging_frame"}
+_VALLEY_PROP_BG_COLOR = (14, 27, 40)
+
+# --- village_2（村莊 A，design/village_2.png：田園河谷村落——風車/石橋/市集，中古田園風）
+# 道具列座標（11 個道具：樹／路標／燈柱／長椅／市集攤車／木桶／木箱／花箱／水井／
+# 花缽立柱／柵欄）。
+VILLAGE_2_PROP_REGIONS: dict = {
+    "tree": Region(x=2, y=790, w=219, h=234),
+    "signpost": Region(x=225, y=790, w=102, h=234),
+    "lamppost": Region(x=331, y=790, w=135, h=234),
+    "bench": Region(x=466, y=790, w=135, h=234),
+    "market_stall": Region(x=606, y=790, w=169, h=234),
+    "barrel": Region(x=779, y=790, w=115, h=234),
+    "crate": Region(x=904, y=790, w=130, h=234),
+    "planter": Region(x=1034, y=790, w=133, h=234),
+    "well": Region(x=1174, y=790, w=111, h=234),
+    "pedestal_planter": Region(x=1289, y=790, w=101, h=234),
+    "fence": Region(x=1396, y=790, w=140, h=234),
+}
+_VILLAGE_2_PROP_EXCLUDE_RECTS: dict = {"tree": [Region(x=0, y=0, w=150, h=52)]}
+_VILLAGE_2_DILATED_PROPS = {"signpost", "lamppost", "well", "pedestal_planter", "fence"}
+_VILLAGE_2_PROP_BG_COLOR = (21, 28, 35)
+
+# --- village_3（村莊 B，design/village_3.png：森林樹屋村落）道具列座標（11 個道具：
+# 樹／燈柱／路標／長椅／市集攤車（藥水）／木桶／木箱／花箱／蘑菇樹墩燈／繩橋／水晶井）。
+VILLAGE_3_PROP_REGIONS: dict = {
+    "tree": Region(x=2, y=790, w=193, h=234),
+    "lamppost": Region(x=195, y=790, w=125, h=234),
+    "signpost": Region(x=320, y=790, w=142, h=234),
+    "bench": Region(x=462, y=790, w=130, h=234),
+    "market_stall": Region(x=592, y=790, w=190, h=234),
+    "barrel": Region(x=782, y=790, w=113, h=234),
+    "crate": Region(x=895, y=790, w=135, h=234),
+    "planter": Region(x=1030, y=790, w=110, h=234),
+    "stump_lantern": Region(x=1140, y=790, w=120, h=234),
+    "bridge": Region(x=1260, y=790, w=120, h=234),
+    "crystal_well": Region(x=1380, y=790, w=156, h=234),
+}
+_VILLAGE_3_PROP_EXCLUDE_RECTS: dict = {"tree": [Region(x=0, y=0, w=150, h=52)]}
+_VILLAGE_3_DILATED_PROPS = {"lamppost", "signpost", "stump_lantern", "bridge"}
+_VILLAGE_3_PROP_BG_COLOR = (15, 23, 32)
+
+# --- sky_village（天空村莊，design/sky_village.png：浮空平台迴廊）道具列座標
+# （12 個道具：浮空小樹／石柱／燈柱／路標／花缽／噴泉／木箱／木桶／旗幟燈柱／飛船／
+# 水晶柱／欄杆）。
+SKY_VILLAGE_PROP_REGIONS: dict = {
+    "tree": Region(x=5, y=790, w=155, h=234),
+    "pillar": Region(x=160, y=790, w=136, h=234),
+    "lamppost": Region(x=330, y=790, w=101, h=234),
+    "signpost": Region(x=461, y=790, w=104, h=234),
+    "planter": Region(x=565, y=790, w=131, h=234),
+    "fountain": Region(x=707, y=790, w=123, h=234),
+    "crate": Region(x=850, y=790, w=80, h=234),
+    "barrel": Region(x=930, y=790, w=74, h=234),
+    "banner_post": Region(x=1021, y=790, w=78, h=234),
+    "airship": Region(x=1115, y=790, w=155, h=234),
+    "crystal_pillar": Region(x=1270, y=790, w=89, h=234),
+    "fence": Region(x=1376, y=790, w=143, h=234),
+}
+_SKY_VILLAGE_PROP_EXCLUDE_RECTS: dict = {"tree": [Region(x=0, y=0, w=150, h=52)]}
+_SKY_VILLAGE_DILATED_PROPS = {"pillar", "lamppost", "signpost", "fountain", "banner_post", "crystal_pillar", "fence"}
+_SKY_VILLAGE_PROP_BG_COLOR = (20, 31, 40)
+
+# --- sky_city（天空魔法城，design/sky_city_magic.png：金色魔法水晶城）道具列座標
+# （12 個道具：水晶噴泉／石柱／旗幟燈柱／掛燈／花箱／市集攤車／魔法鏡／寶箱／水晶／
+# 路標／飛船／魔法拱門）。
+SKY_CITY_PROP_REGIONS: dict = {
+    "crystal_fountain": Region(x=5, y=790, w=122, h=234),
+    "pillar": Region(x=141, y=790, w=112, h=234),
+    "banner_post": Region(x=259, y=790, w=94, h=234),
+    "lamp": Region(x=353, y=790, w=55, h=234),
+    "planter": Region(x=408, y=790, w=105, h=234),
+    "market_stall": Region(x=513, y=790, w=192, h=234),
+    "mirror": Region(x=725, y=790, w=105, h=234),
+    "chest": Region(x=846, y=790, w=141, h=234),
+    "crystal": Region(x=1002, y=790, w=100, h=234),
+    "signpost": Region(x=1107, y=790, w=75, h=234),
+    "airship": Region(x=1187, y=790, w=143, h=234),
+    "gate": Region(x=1330, y=790, w=195, h=234),
+}
+_SKY_CITY_PROP_EXCLUDE_RECTS: dict = {"crystal_fountain": [Region(x=0, y=0, w=150, h=52)]}
+_SKY_CITY_DILATED_PROPS = {"pillar", "banner_post", "lamp", "signpost", "gate", "crystal_fountain"}
+_SKY_CITY_PROP_BG_COLOR = (10, 23, 38)
+
+
+def slice_new_region_props(
+    sheet: Image, regions: dict, bg_color: tuple, dilated_names: set,
+    exclude_rects: dict, min_area: int = 30,
+) -> dict:
+    """5 個新地域（valley/village_2/village_3/sky_village/sky_city）共用的道具切圖流程：
+    與 `slice_grassland_props`/`slice_kingdom_props` 同一套手法（`chroma_key_flood_color` +
+    exclude rect 蓋標籤方框 + 依 `dilated_names` 選去雜點策略），只是座標表/背景色/
+    細桿件分類逐張各自校準，抽成通用函式避免 5 份幾乎重複的程式碼。
+    """
+    out = {}
+    for name, region in regions.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        if name in exclude_rects:
+            cropped = _apply_exclude_rects(cropped, exclude_rects[name])
+        keyed = chroma_key_flood_color(cropped, bg_color, threshold=20)
+        if name in dilated_names:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=min_area)
+        out[name] = autocrop(keyed)
+    return out
+
+
+def slice_new_region_bg(sheet: Image) -> dict:
+    """5 個新地域共用的背景四層切圖流程（層 y 帶/標籤方框與 grassland 共用，見
+    `NEW_REGION_BG_*`/`NEW_REGION_LABEL_BOX_RECTS`）。回傳 `{layer_name: Image}`。"""
+    layers = (
+        ("far", NEW_REGION_BG_FAR, None, "far"),
+        ("mid", NEW_REGION_BG_MID, NEW_REGION_MID_TOP_FADE_PX, "mid"),
+        ("fore", NEW_REGION_BG_FORE, NEW_REGION_FORE_TOP_FADE_PX, "fore"),
+        ("ground", NEW_REGION_BG_GROUND, None, "ground"),
+    )
+    out = {}
+    for name, region, fade_px, label_key in layers:
+        img = sheet.crop(region.x, region.y, region.w, region.h)
+        if label_key is not None and label_key in NEW_REGION_LABEL_BOX_RECTS:
+            if label_key == "ground":
+                img = patch_label_box_horizontal(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
+            else:
+                img = patch_label_box(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
+        if fade_px:
+            img = fade_top_edge(img, fade_px=fade_px)
+        out[name] = img
+    return out
+
+
 def pad_to_common_size(frames: list) -> list:
     """把一組 frame pad 成相同尺寸（以最大寬高為準、水平置中、底部對齊）避免走路動畫抖動。"""
     if not frames:
@@ -1111,39 +1252,30 @@ def main() -> None:
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
 
-    # --- 王國首都地域（Stage B `18_STAGE_B_SPEC.md` §1 → Stage C `19_STAGE_C_SPEC.md` §1
-    # 重切）：環境（背景+道具）讀新版 design/kingdom.png（更精緻、無角色列）；
-    # NPC 讀救回的舊版 design/kingdom_characters.png（唯一還保留角色列的素材表）。---
+    # --- 王國首都地域（美術大改版第 2 波，`21_ASSET_OVERHAUL_PLAN.md` §4 重切）：
+    # 環境（背景+道具）讀新版 1536x1024 design/kingdom.png（與 grassland 同款版式，取代
+    # Stage C 舊 1774x887 版本，尺寸 guard 已移除）；NPC 讀救回的舊版
+    # design/kingdom_characters.png（唯一還保留角色列的素材表，不受本次重切影響）。---
     if os.path.exists(KINGDOM_SHEET):
         kingdom_sheet = decode_png(KINGDOM_SHEET)
         print(f"kingdom_sheet: {kingdom_sheet.width}x{kingdom_sheet.height}")
-    else:
-        kingdom_sheet = None
 
-    if kingdom_sheet is not None and kingdom_sheet.width != 1774:
-        # 美術大改版（`21_ASSET_OVERHAUL_PLAN.md`）已把 design/kingdom.png 換成新的
-        # 1536x1024 標準尺寸版本（`20_ASSET_SHEET_SPEC.md` 規格），但 `KINGDOM_BG_*`/
-        # `KINGDOM_PROP_REGIONS` 座標表是照舊版 1774x887 版面校準的，兩者不相容
-        # （硬套會裁出錯位/越界的圖，`fade_top_edge` 甚至會因裁切出 ragged row 而 crash）。
-        # 王國地域重切是**美術大改版第 2 波**的範圍（`21` §4「其餘地域切圖」），本波
-        # （第 1 波：主角/旅伴/grassland）刻意不動王國——這裡優雅跳過並印出提示，
-        # 保留 `Resources/art/regions/kingdom/` 現有輸出檔（若有）不被覆蓋成錯誤內容。
-        print(f"note: {KINGDOM_SHEET} is now {kingdom_sheet.width}x{kingdom_sheet.height} (新標準尺寸)，"
-              "舊 KINGDOM_BG_*/KINGDOM_PROP_REGIONS 座標表尚未依此重新校準"
-              "（王國重切屬美術大改版第 2 波範圍），本次跳過王國 bg/props 切圖")
-    elif kingdom_sheet is not None:
         kingdom_bg_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "bg")
         kingdom_layers = (
             ("far", KINGDOM_BG_FAR, None, "far"),
             ("mid", KINGDOM_BG_MID, KINGDOM_BG_MID_TOP_FADE_PX, "mid"),
             ("fore", KINGDOM_BG_FORE, KINGDOM_BG_FORE_TOP_FADE_PX, "fore"),
-            ("ground", KINGDOM_BG_GROUND, None, None),
+            ("ground", KINGDOM_BG_GROUND, None, "ground"),
         )
         for name, region, fade_px, label_key in kingdom_layers:
             img = kingdom_sheet.crop(region.x, region.y, region.w, region.h)
             if label_key is not None and label_key in KINGDOM_LABEL_BOX_RECTS:
-                # 蓋掉疊在內容左上角的「遠景/中景/前景」標籤黑底方框（見 `patch_label_box` 說明）。
-                img = patch_label_box(img, KINGDOM_LABEL_BOX_RECTS[label_key])
+                # 蓋掉疊在內容左上角的「遠景/中景/前景/地面平台」標籤黑底方框
+                # （同 `slice_grassland_props` 手法，地面平台用水平版 patch）。
+                if label_key == "ground":
+                    img = patch_label_box_horizontal(img, KINGDOM_LABEL_BOX_RECTS[label_key])
+                else:
+                    img = patch_label_box(img, KINGDOM_LABEL_BOX_RECTS[label_key])
             if fade_px:
                 # mid/fore 疊在後方層之前、上緣重疊，淡出讓接縫變漸層（同 `BG_MID_TOP_FADE_PX` 手法）。
                 img = fade_top_edge(img, fade_px=fade_px)
@@ -1248,6 +1380,41 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {GRASSLAND_SHEET} not found, skipping grassland region slicing")
+
+    # --- 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：5 個新地域，共用
+    # `slice_new_region_bg`/`slice_new_region_props`（見上方定義），逐張各自的座標表/
+    # 背景色/dilated 分類。---
+    new_regions = (
+        ("valley", VALLEY_SHEET, VALLEY_PROP_REGIONS, _VALLEY_PROP_BG_COLOR,
+         _VALLEY_DILATED_PROPS, _VALLEY_PROP_EXCLUDE_RECTS),
+        ("village_2", VILLAGE_2_SHEET, VILLAGE_2_PROP_REGIONS, _VILLAGE_2_PROP_BG_COLOR,
+         _VILLAGE_2_DILATED_PROPS, _VILLAGE_2_PROP_EXCLUDE_RECTS),
+        ("village_3", VILLAGE_3_SHEET, VILLAGE_3_PROP_REGIONS, _VILLAGE_3_PROP_BG_COLOR,
+         _VILLAGE_3_DILATED_PROPS, _VILLAGE_3_PROP_EXCLUDE_RECTS),
+        ("sky_village", SKY_VILLAGE_SHEET, SKY_VILLAGE_PROP_REGIONS, _SKY_VILLAGE_PROP_BG_COLOR,
+         _SKY_VILLAGE_DILATED_PROPS, _SKY_VILLAGE_PROP_EXCLUDE_RECTS),
+        ("sky_city", SKY_CITY_SHEET, SKY_CITY_PROP_REGIONS, _SKY_CITY_PROP_BG_COLOR,
+         _SKY_CITY_DILATED_PROPS, _SKY_CITY_PROP_EXCLUDE_RECTS),
+    )
+    for region_name, sheet_path, prop_regions, bg_color, dilated_names, exclude_rects in new_regions:
+        if not os.path.exists(sheet_path):
+            print(f"note: {sheet_path} not found, skipping {region_name} region slicing")
+            continue
+        region_sheet = decode_png(sheet_path)
+        print(f"{region_name}_sheet: {region_sheet.width}x{region_sheet.height}")
+
+        bg_dir_out = os.path.join(OUT_ROOT, "regions", region_name, "bg")
+        for name, img in slice_new_region_bg(region_sheet).items():
+            out_path = os.path.join(bg_dir_out, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        props_dir_out = os.path.join(OUT_ROOT, "regions", region_name, "props")
+        props = slice_new_region_props(region_sheet, prop_regions, bg_color, dilated_names, exclude_rects)
+        for name, img in props.items():
+            out_path = os.path.join(props_dir_out, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
 
 
 def inspect(sheet: Image) -> None:
