@@ -1,3 +1,4 @@
+import Foundation
 import SpriteKit
 
 /// Phase 2 場景：消費 `GameState`，世界依里程捲動（ADR-009），回歸時播離線呈現。
@@ -13,6 +14,18 @@ public final class GameScene: SKScene {
     private var landmarkNodes: [String: SKNode] = [:]
     /// 近景散落道具（Phase 4b `12` §2/§6）：純裝飾、不入 `GameState`，位置由 `PropScatter` 純函式決定。
     private var propNodes: [(node: SKSpriteNode, slot: PropScatter.Slot)] = []
+
+    // MARK: - 晝夜光影 + 天氣（Phase 4c，`12` §3/§4）：純裝飾 L6 氛圍層，不入 `GameState`。
+
+    /// 晝夜色調 overlay：全螢幕覆蓋、依 `DayNightCycle`（純函式）套色，`update(_:)` 每幀更新（連續函式，
+    /// 逐幀更新也不會跳變）。`motionEnabled == false` 時停用漸變、維持白日中性（`03` §1.5 reduce motion）。
+    private var dayNightOverlay: SKSpriteNode?
+    /// 天氣 overlay：依 `Weather`（純函式）套色，僅在天氣「切換」時才變（低頻），切換時做柔和 crossfade。
+    private var weatherOverlay: SKSpriteNode?
+    /// 目前套用中的天氣，供偵測「是否切換」。
+    private var currentWeather: WeatherKind = .clear
+    /// 雨天粒子容器（緩慢雨絲，低密度）；`motionEnabled == false` 或非雨天時為 `nil`。
+    private var rainLayer: SKNode?
 
     private var lastUpdateTime: TimeInterval?
     private var timeSinceLastTick: Double = 0
@@ -84,6 +97,7 @@ public final class GameScene: SKScene {
 
         buildLandmarkNodes()
         buildPropNodes()
+        buildAtmosphereOverlays()
         applyWorldScroll(distance: displayedDistance)
 
         // 若載入的存檔已相遇過旅伴，直接常態呈現同行（不重播 peak，peak 只在「當下相遇」發生一次）。
@@ -144,8 +158,42 @@ public final class GameScene: SKScene {
         }
     }
 
+    /// L6 氛圍層（`03` §2.4）：晝夜 tint + 天氣 overlay，兩張覆蓋全畫面的 `SKSpriteNode`，
+    /// zPosition 高於場景/角色（40 一族）、低於旅程日誌 toast（100），blend 為預設 `.alpha`
+    /// （克制的半透明疊色，不用 `.multiply` 以免在夜間把暗部壓到看不清角色，`12` §7 風險）。
+    private func buildAtmosphereOverlays() {
+        let dayNight = SKSpriteNode(color: .white, size: size)
+        dayNight.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        dayNight.position = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) / 2.0)
+        dayNight.zPosition = 40
+        dayNight.colorBlendFactor = 1.0 // texture-less color sprite 需設此才會套用 .color tint
+        dayNight.alpha = 0
+        addChild(dayNight)
+        dayNightOverlay = dayNight
+
+        let weather = SKSpriteNode(color: .clear, size: size)
+        weather.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        weather.position = dayNight.position
+        weather.zPosition = 41
+        weather.colorBlendFactor = 1.0
+        weather.alpha = 0
+        addChild(weather)
+        weatherOverlay = weather
+    }
+
+    /// 視窗尺寸變動（縮放/多螢幕）時，氛圍 overlay 需跟著填滿新尺寸，否則邊緣露出未染色的畫面。
+    public override func didChangeSize(_ oldSize: CGSize) {
+        super.didChangeSize(oldSize)
+        let center = CGPoint(x: Double(size.width) / 2.0, y: Double(size.height) / 2.0)
+        dayNightOverlay?.size = size
+        dayNightOverlay?.position = center
+        weatherOverlay?.size = size
+        weatherOverlay?.position = center
+    }
+
     public override func update(_ currentTime: TimeInterval) {
         super.update(currentTime)
+        updateAtmosphere()
         defer { lastUpdateTime = currentTime }
         guard let last = lastUpdateTime else { return }
         let dt = currentTime - last
@@ -156,6 +204,147 @@ public final class GameScene: SKScene {
             performTick(dt: timeSinceLastTick)
             timeSinceLastTick = 0
         }
+    }
+
+    // MARK: - 晝夜光影 + 天氣的每幀套用（`12` §3/§4）
+
+    /// 每幀套用晝夜 tint（連續函式，逐幀更新不會跳變）與偵測天氣切換。
+    /// `motionEnabled == false`（reduce motion）時：停用漸變、維持白日中性、天氣強制回晴天、停用粒子
+    /// （`03` §1.5、`12` §3「受 motionEnabled 控制」）。
+    ///
+    /// 支援環境變數強制指定時段/天氣，供 Fable 截圖驗收黎明/夜晚/雨天等畫面而不必真的等到那個時刻：
+    /// `FYW_DEBUG_SECONDS_INTO_DAY`（0..<86400 的秒數）、`FYW_DEBUG_WEATHER`（`clear`/`overcast`/`rain`）。
+    private func updateAtmosphere() {
+        guard let dayNightOverlay, let weatherOverlay else { return }
+
+        guard motionEnabled else {
+            dayNightOverlay.removeAllActions()
+            dayNightOverlay.color = .white
+            dayNightOverlay.alpha = 0
+            if currentWeather != .clear {
+                applyWeatherChange(.clear)
+            } else {
+                weatherOverlay.removeAllActions()
+                weatherOverlay.alpha = 0
+                stopRain()
+            }
+            return
+        }
+
+        let secondsIntoDay = Self.debugSecondsIntoDayOverride() ?? Self.localSecondsIntoDay(unixSeconds: timeProvider.now)
+        let tint = DayNightCycle.tint(forSecondsIntoDay: secondsIntoDay)
+        // color 必須用不透明版本（alpha=1）：若帶 tint 自己的 alpha，SpriteKit 會與 node.alpha
+        // 相乘（0.46×0.46≈0.21，再被感知為更弱）導致 tint 讀不出——這是本 overlay 曾無效的根因。
+        dayNightOverlay.color = tint.withAlpha(1.0).skColor
+        dayNightOverlay.alpha = CGFloat(tint.alpha)
+
+        let weather = Self.debugWeatherOverride() ?? Weather.kind(forUnixSeconds: timeProvider.now)
+        if weather != currentWeather {
+            applyWeatherChange(weather)
+        }
+    }
+
+    /// 換算「當日秒數」用**本機時區**（使用者實際看到的日夜，而非 UTC）。
+    private static func localSecondsIntoDay(unixSeconds: Double) -> Double {
+        let date = Date(timeIntervalSince1970: unixSeconds)
+        let components = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        let hour = Double(components.hour ?? 0)
+        let minute = Double(components.minute ?? 0)
+        let second = Double(components.second ?? 0)
+        return hour * 3600 + minute * 60 + second
+    }
+
+    private static func debugSecondsIntoDayOverride() -> Double? {
+        guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_SECONDS_INTO_DAY"] else { return nil }
+        return Double(raw)
+    }
+
+    private static func debugWeatherOverride() -> WeatherKind? {
+        guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_WEATHER"] else { return nil }
+        switch raw.lowercased() {
+        case "clear": return .clear
+        case "overcast": return .overcast
+        case "rain": return .rain
+        default: return nil
+        }
+    }
+
+    /// 天氣切換（低頻，每 `Weather.periodSeconds` 才可能變一次）：先淡出舊 tint 再換色再淡入新 tint，
+    /// 避免「可見狀態下色相瞬間跳變」；`motionEnabled == false` 時直接設定不做動畫。
+    private func applyWeatherChange(_ kind: WeatherKind) {
+        currentWeather = kind
+        guard let weatherOverlay else { return }
+        let tint = Weather.overlayTint(for: kind)
+        // 同 dayNight：color 用不透明版本，opacity 全交給 node.alpha（避免 color.alpha × node.alpha 相乘變透明）。
+        let targetColor = tint?.withAlpha(1.0).skColor ?? .clear
+        let targetAlpha = CGFloat(tint?.alpha ?? 0)
+
+        weatherOverlay.removeAllActions()
+        if motionEnabled {
+            let fadeOut = SKAction.fadeAlpha(to: 0, duration: 4.0)
+            let swap = SKAction.run { weatherOverlay.color = targetColor }
+            let fadeIn = SKAction.fadeAlpha(to: targetAlpha, duration: 6.0)
+            weatherOverlay.run(SKAction.sequence([fadeOut, swap, fadeIn]))
+        } else {
+            weatherOverlay.color = targetColor
+            weatherOverlay.alpha = targetAlpha
+        }
+
+        if kind == .rain && motionEnabled {
+            startRain()
+        } else {
+            stopRain()
+        }
+    }
+
+    /// 低密度、緩慢的雨絲（`12` §4：加緩慢粒子）。不用 `SKEmitterNode`（需要粒子貼圖，headless/測試環境
+    /// 產生貼圖需要可渲染的 view context，風險較高）；改用一組手動管理、`repeat` 位移的細長色塊，
+    /// 效果相同且完全可控、無額外資源依賴。
+    private static let rainDropCount = 14
+
+    private func startRain() {
+        guard motionEnabled, rainLayer == nil else { return }
+        let layer = SKNode()
+        layer.zPosition = 42
+        for _ in 0..<Self.rainDropCount {
+            let drop = SKSpriteNode(color: SKColor(white: 0.85, alpha: 0.35), size: CGSize(width: 2, height: 12))
+            drop.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+            layer.addChild(drop)
+            resetRainDrop(drop)
+            animateRainDrop(drop)
+        }
+        addChild(layer)
+        rainLayer = layer
+    }
+
+    private func resetRainDrop(_ drop: SKSpriteNode) {
+        let x = Double.random(in: 0...Double(size.width))
+        let y = Double(size.height) + Double.random(in: 0...80)
+        drop.position = CGPoint(x: x, y: y)
+    }
+
+    /// 有機、非等速：每滴雨速度略有隨機差異（`03` §3.4「有機」原則），且刻意偏慢（緩慢雨粒子）。
+    private func animateRainDrop(_ drop: SKSpriteNode) {
+        let duration = Double.random(in: 3.2...4.6)
+        let fall = SKAction.moveBy(x: -14, y: -(Double(size.height) + 120), duration: duration)
+        fall.timingMode = .linear
+        let reset = SKAction.run { [weak self, weak drop] in
+            guard let drop else { return }
+            self?.resetRainDrop(drop)
+        }
+        let chain = SKAction.run { [weak self, weak drop] in
+            guard let drop else { return }
+            self?.animateRainDrop(drop)
+        }
+        drop.run(SKAction.sequence([fall, reset, chain]))
+    }
+
+    private func stopRain() {
+        guard let layer = rainLayer else { return }
+        layer.children.forEach { $0.removeAllActions() }
+        layer.removeAllActions()
+        layer.removeFromParent()
+        rainLayer = nil
     }
 
     /// 從暫停（閒置回來 / `didWake`）恢復時，走與**離線啟動相同**的 capped 補算路徑：
