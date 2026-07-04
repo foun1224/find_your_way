@@ -61,6 +61,20 @@ public final class GameScene: SKScene {
     private var timeSinceLastTick: Double = 0
     private var pendingOutcome: OfflineOutcome?
 
+    /// 單幀時間 clamp 上限（秒）：避免掉幀/尖峰 `dt`（例如系統短暫卡頓）讓 `displayedDistance`
+    /// 單幀跳一大步，看起來像瞬移。正常幀遠低於此值（60fps ≈ 0.0167s），只在異常時生效。
+    private static let maxFrameDt: Double = 0.25
+
+    /// 極小漂移校正的比例增益（每秒收斂比例，見 `advanceDisplayedDistance` 說明）：只是安全網，
+    /// 修正因 `maxFrameDt` clamp 或浮點誤差累積造成的 `displayedDistance`/`gameState.distance` 微小落差，
+    /// 用連續比例修正（類似臨界阻尼）而非硬設，確保不會產生可見跳動。
+    private static let driftCorrectionGain: Double = 2.0
+
+    /// `true` 表示目前有一段捲動補間 `SKAction` 正在跑（`presentReturnCatchUp` 的離線回歸、
+    /// `catchUpDisplayedDistance` 的偶爾看你結束追趕）：此時每幀推進讓路給補間動畫全權主導
+    /// `displayedDistance`，避免兩邊同時寫入互相打架、抵銷補間的加速/緩動曲線。
+    private var isCatchUpActive = false
+
     // MARK: - 點角色微互動（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不入 `GameState`）
 
     /// 防連點節流：避免狂點洗版式重複觸發動畫（不是「不能點」，只是同一瞬間只播一次）。
@@ -277,11 +291,47 @@ public final class GameScene: SKScene {
         let dt = currentTime - last
         guard dt > 0 else { return }
 
+        // 世界捲動每幀連續推進（修 `一頓一頓`：先前只在 2 秒 tick 時把 `displayedDistance`
+        // 硬設成 `gameState.distance`，世界因此每 2 秒跳一格）。`gameState.distance` 仍完全
+        // 由下面的低頻 `performTick` 推進，供事件/章節/相遇/存檔/離線續用；兩者是同一個
+        // 「speed × 經過秒數」積分式，長期會自然貼合，這裡只是把「畫面呈現」的積分頻率
+        // 從每 2 秒一次改成每幀一次。
+        advanceDisplayedDistance(frameDt: dt)
+
         timeSinceLastTick += dt
         if timeSinceLastTick >= Self.tickInterval {
             performTick(dt: timeSinceLastTick)
             timeSinceLastTick = 0
         }
+    }
+
+    /// 每幀把 `displayedDistance` 平滑推進 `rules.speed * frameDt`，並套用世界捲動——這是背景/
+    /// 地標/道具/地域連續平滑捲動的核心（角色原地走路的 `SKAction` 本就連續，現在世界捲動也連續）。
+    ///
+    /// 三種情況讓路、不在這裡推進：
+    /// - `isCharacterResting`（偶爾看你）：世界視覺凍結，`gameState.distance` 照常推進，
+    ///   結束由 `endHeroRest` → `catchUpDisplayedDistance` 平滑追回（不變式，見該處註解）。
+    /// - `isCatchUpActive`：有一段補間 `SKAction` 正在主導 `displayedDistance`（離線回歸/看你
+    ///   結束追趕），讓補間自己的緩動曲線說了算，避免兩邊同時寫值互相打架。
+    /// - `frameDt <= 0`：無時間經過，無事可做。
+    private func advanceDisplayedDistance(frameDt: Double) {
+        guard !isCharacterResting, !isCatchUpActive, frameDt > 0 else { return }
+
+        let clampedDt = min(frameDt, Self.maxFrameDt)
+        displayedDistance += rules.speed * clampedDt
+
+        // 極小漂移校正（安全網）：`displayedDistance`（每幀累加、clamp 過）與 `gameState.distance`
+        // （`performTick` 每 2 秒用未 clamp 的 `timeSinceLastTick` 一次算出）理論上是同一條積分曲線，
+        // 正常情況下落差趨近 0；只有掉幀/尖峰被 `maxFrameDt` clamp 掉的極端情況才會有微小落差。
+        // 用比例增益連續收斂（每秒收斂 `driftCorrectionGain` 比例，非硬設瞬間對齊），確保不會產生
+        // 可見跳動——這也是為什麼移除了舊版 `performTick` 裡「把 `displayedDistance` 設成
+        // `gameState.distance`」那行（那正是造成 2 秒跳格的來源）。
+        let drift = gameState.distance - displayedDistance
+        if drift != 0 {
+            displayedDistance += drift * min(1.0, Self.driftCorrectionGain * clampedDt)
+        }
+
+        applyWorldScroll(distance: displayedDistance)
     }
 
     // MARK: - 晝夜光影 + 天氣的每幀套用（`12` §3/§4）
@@ -476,6 +526,11 @@ public final class GameScene: SKScene {
         // 若恰好在「偶爾看你」休息期間閒置/睡眠，恢復時直接解除凍結、跳過補間直接對齊
         // （長時間睡眠後的補間不具意義），避免卡在「永遠不會結束的休息」。
         isCharacterResting = false
+        // 安全網：若恰好有一段捲動補間 `SKAction` 正在跑（離線回歸/看你結束追趕，極罕見——
+        // 這兩段補間都只有數秒或不到一秒），閒置/睡眠恢復要直接對齊、解除旗標，讓每幀推進
+        // 從這個新基準點接手，不留著半途而廢的補間跟它打架。不用 `removeAllActions()`，
+        // 那會連帶砍掉「偶爾看你」的排程動作（`scheduleNextHeroRest`），讓主角從此不再看你。
+        isCatchUpActive = false
         displayedDistance = gameState.distance
         applyWorldScroll(distance: displayedDistance)
 
@@ -502,13 +557,12 @@ public final class GameScene: SKScene {
         var updated = newState
         updated.lastActiveTimestamp = timeProvider.now
         gameState = updated
-        // 不變式（`13_PSYCH_AUDIT.md` P1 紅線）：`GameState.distance` 的推進（上面幾行）
-        // 永遠照常運作，不受「主角正在看你」影響；**只有畫面呈現用的 `displayedDistance`**
-        // 在休息期間暫停更新，讓世界看起來靜止。休息結束時由 `endHeroRest` 平滑追趕回來。
-        if !isCharacterResting {
-            displayedDistance = gameState.distance
-            applyWorldScroll(distance: displayedDistance)
-        }
+        // 不變式（`13_PSYCH_AUDIT.md` P1 紅線）：`GameState.distance` 的推進（上面幾行）永遠照常
+        // 運作，不受「主角正在看你」影響。畫面呈現用的 `displayedDistance` **不在這裡**推進/對齊
+        // ——它由 `update(_:)` 的 `advanceDisplayedDistance` 每幀連續推進（世界連續平滑捲動）；
+        // 這裡若把它硬設成 `gameState.distance` 會造成世界每 2 秒跳一格（已修的一頓一頓根因）。
+        // 休息期間的凍結/追趕仍由 `isCharacterResting` + `endHeroRest` → `catchUpDisplayedDistance`
+        // 負責，與這裡的低頻 tick 完全解耦。
         onStateChanged?(gameState)
 
         // 章節轉場（`09` §4.1）：跨越章節門檻時在旅程日誌顯示一行（非互動）。
@@ -608,6 +662,7 @@ public final class GameScene: SKScene {
             return
         }
 
+        isCatchUpActive = true
         let duration = HeroRestSchedule.catchUpDurationSeconds
         let catchUp = SKAction.customAction(withDuration: duration) { [weak self] _, elapsed in
             guard let self else { return }
@@ -616,7 +671,8 @@ public final class GameScene: SKScene {
             self.applyWorldScroll(distance: self.displayedDistance)
         }
         catchUp.timingMode = .easeInEaseOut
-        run(catchUp)
+        let clearFlag = SKAction.run { [weak self] in self?.isCatchUpActive = false }
+        run(SKAction.sequence([catchUp, clearFlag]))
     }
 
     /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置，並依
@@ -746,6 +802,7 @@ public final class GameScene: SKScene {
         applyWorldScroll(distance: displayedDistance)
 
         if motionEnabled {
+            isCatchUpActive = true
             let catchUpDuration: TimeInterval = 2.5
             let catchUp = SKAction.customAction(withDuration: catchUpDuration) { [weak self] _, elapsed in
                 guard let self else { return }
@@ -757,7 +814,8 @@ public final class GameScene: SKScene {
             // 呼應「有機 Organic」（`03` §3.4：避免機械等速），這裡先前漏設、以固定速度捲動；
             // 補上讓兩處世界捲動補間的手感一致。
             catchUp.timingMode = .easeInEaseOut
-            run(catchUp)
+            let clearFlag = SKAction.run { [weak self] in self?.isCatchUpActive = false }
+            run(SKAction.sequence([catchUp, clearFlag]))
         } else {
             // Reduce-motion：跳過捲動補間，直接對齊（`03` §1.5），理由同 `catchUpDisplayedDistance`。
             displayedDistance = gameState.distance
