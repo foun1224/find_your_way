@@ -192,6 +192,105 @@ def chroma_key_flood(img: Image, threshold: int = 28) -> Image:
     return out
 
 
+def despeckle_neutral_residue(img: Image, lo: int = 24, hi: int = 45, max_spread: int = 8) -> Image:
+    """清掉「殘留背景色」的雜點像素：素材表底色是近乎無彩度的深灰 #1B1B1B（≈27,27,27），
+    跟 `chroma_key_flood` 的 threshold（28）太接近，邊界像素常落在 27-33 附近而漏網
+    （亮度剛好卡在 threshold 兩側）。這批殘留像素的特徵是「亮度落在窄帶內、且幾乎無彩度
+    （r/g/b 三色非常接近）」；相對地，角色本體的暗部（髮絲陰影、皮革、瞳孔）即使很暗，
+    也都帶有明顯色相（暖棕/冷藍等），spread 遠大於這裡的門檻，不會被誤清。
+    這一步是純顏色判斷（不看連通性），所以就算雜點像素直接貼著角色邊緣（例如頭髮邊界），
+    也能清掉——`chroma_key_flood`／`keep_largest_component` 都無法處理這種「貼在本體上」的殘留。
+    """
+    w, h = img.width, img.height
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = out.pixels[y][x]
+            if a == 0:
+                continue
+            brightness = (r + g + b) // 3
+            spread = max(r, g, b) - min(r, g, b)
+            if lo <= brightness <= hi and spread <= max_spread:
+                out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
+def keep_largest_component(img: Image) -> Image:
+    """去背後常殘留「未連到畫布邊界、亮度剛好卡在 threshold 附近」的孤立暗色雜點
+    （素材表背景近黑色 #1B1B1B 本身就落在 27-30 左右，跟 `chroma_key_flood` 的
+    threshold=28 太接近，導致部分背景像素沒被 flood 到、留下散落雜點——例如主角
+    頭部右上那撮雜點）。這裡用連通元件分析清掉它們：主角/旅伴走路 frame 本體
+    永遠是單一個大連通塊（頭髮/描邊/靴子暗部都跟身體相連），其餘每個 frame 只會
+    殘留數十像素等級的小雜點，因此「只保留最大連通塊、其餘轉透明」對本體零傷害。
+    """
+    w, h = img.width, img.height
+    visited = [[False] * w for _ in range(h)]
+    best_pixels: list = []
+
+    for sy in range(h):
+        for sx in range(w):
+            if visited[sy][sx] or img.get(sx, sy)[3] == 0:
+                continue
+            stack = [(sx, sy)]
+            visited[sy][sx] = True
+            pixels = []
+            while stack:
+                x, y = stack.pop()
+                pixels.append((x, y))
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and img.get(nx, ny)[3] > 0:
+                        visited[ny][nx] = True
+                        stack.append((nx, ny))
+            if len(pixels) > len(best_pixels):
+                best_pixels = pixels
+
+    keep = set(best_pixels)
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for y in range(h):
+        for x in range(w):
+            if out.pixels[y][x][3] > 0 and (x, y) not in keep:
+                r, g, b, _ = out.pixels[y][x]
+                out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
+def remove_small_components(img: Image, min_area: int = 12) -> Image:
+    """去背後常殘留「未連到畫布邊界、亮度剛好卡在 threshold 附近」的孤立暗色雜點
+    （原因同 `keep_largest_component` 的說明）。道具（`slice_props`）跟角色走路 frame
+    不同：不少道具本體本來就是「多個分離部件」組成（例如柵欄是好幾根柱子中間有透明間隙、
+    路標是柱+牌、haycart 是車體+輪子），若直接套用「只留最大連通塊」會把這些合理部件
+    誤刪成只剩最大的一塊。因此這裡改用「面積門檻」：只清掉像素數 < `min_area`
+    （數十像素等級的雜點）的連通塊，其餘（不論大小、只要夠大）一律保留，
+    對道具的多部件結構零傷害，仍能清掉散落雜點。
+    """
+    w, h = img.width, img.height
+    visited = [[False] * w for _ in range(h)]
+    small: list = []
+
+    for sy in range(h):
+        for sx in range(w):
+            if visited[sy][sx] or img.get(sx, sy)[3] == 0:
+                continue
+            stack = [(sx, sy)]
+            visited[sy][sx] = True
+            pixels = [(sx, sy)]
+            while stack:
+                x, y = stack.pop()
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and img.get(nx, ny)[3] > 0:
+                        visited[ny][nx] = True
+                        pixels.append((nx, ny))
+                        stack.append((nx, ny))
+            if len(pixels) < min_area:
+                small.extend(pixels)
+
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for (x, y) in small:
+        r, g, b, _ = out.pixels[y][x]
+        out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
 def autocrop(img: Image) -> Image:
     """裁到非透明像素的 bounding box；若全透明則回傳原圖。"""
     min_x, min_y = img.width, img.height
@@ -295,6 +394,10 @@ BG_FAR = Region(x=95, y=472, w=1431, h=164)
 BG_MID = Region(x=95, y=637, w=1431, h=136)
 BG_GROUND = Region(x=95, y=915, w=1431, h=73)
 
+# mid 疊在 far 之前且上緣重疊（`ParallaxBackground.midFarOverlap`）；兩張各自獨立 panorama
+# 顏色在重疊區未必連續，硬邊會在 mid 上緣形成接縫。淡出 12px 讓 mid 上緣透出後方的 far。
+BG_MID_TOP_FADE_PX = 22
+
 
 def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
     """依 `region` 裁出一整排走路 frame、去背，再依透明間隙切成 `frame_count` 格並各自 autocrop。
@@ -302,10 +405,12 @@ def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
     """
     row_img = sheet.crop(region.x, region.y, region.w, region.h)
     keyed = chroma_key_flood(row_img, threshold=28)
+    keyed = despeckle_neutral_residue(keyed)
     segments = segment_row_by_gaps(keyed, frame_count)
     frames = []
     for (sx, sw) in segments:
         frame = keyed.crop(sx, 0, sw, keyed.height)
+        frame = keep_largest_component(frame)
         frame = autocrop(frame)
         frames.append(frame)
     return frames
@@ -329,7 +434,25 @@ def slice_props(sheet: Image) -> dict:
         h = min(region.h, sheet.height - region.y)
         cropped = sheet.crop(region.x, region.y, w, h)
         keyed = chroma_key_flood(cropped, threshold=28)
+        keyed = despeckle_neutral_residue(keyed)
+        keyed = remove_small_components(keyed)
         out[name] = autocrop(keyed)
+    return out
+
+
+def fade_top_edge(img: Image, fade_px: int) -> Image:
+    """把 `img` 最上緣 `fade_px` 列做垂直 alpha 漸層淡出（頂端 alpha=0，`fade_px` 列處回到原 alpha）。
+    用途：`bg/mid.png` 疊在 `bg/far.png` 之前（`ParallaxBackground` mid/far 有重疊區，
+    mid zPosition 較高蓋住 far），兩張各自獨立 panorama 在重疊區顏色未必連續，
+    硬邊會在 mid 上緣形成明顯接縫。淡出後 mid 上緣透出後方的 far，接縫變成漸層過渡。
+    """
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    fade_px = min(fade_px, img.height)
+    for y in range(fade_px):
+        factor = y / fade_px  # 0.0 at top row -> ~1.0 just before fade_px
+        for x in range(img.width):
+            r, g, b, a = out.pixels[y][x]
+            out.pixels[y][x] = (r, g, b, int(a * factor))
     return out
 
 
@@ -365,6 +488,9 @@ def main() -> None:
     bg_dir = os.path.join(OUT_ROOT, "bg")
     for name, region in (("far", BG_FAR), ("mid", BG_MID), ("ground", BG_GROUND)):
         img = sheet.crop(region.x, region.y, region.w, region.h)
+        if name == "mid":
+            # mid 疊在 far 之前、上緣與 far 重疊，淡出上緣讓接縫變成漸層（見 `fade_top_edge`）。
+            img = fade_top_edge(img, fade_px=BG_MID_TOP_FADE_PX)
         out_path = os.path.join(bg_dir, f"{name}.png")
         encode_png(img, out_path)
         print(f"wrote {out_path} ({img.width}x{img.height})")
