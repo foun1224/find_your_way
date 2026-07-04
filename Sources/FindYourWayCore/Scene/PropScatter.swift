@@ -174,6 +174,10 @@ public enum PropScatter {
         case .village3: return village3Slots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots
+        // 海港（`20` §8A 驗證地域）：道具美術已切好（`regions/harbor/props/`），但尚未排入
+        // 8 地域循環，暫不配置散落槽位（`ParallaxBackground` 的真多層視差驗收重點是
+        // far/mid/fore/ground 背景堆疊，非近景道具散落）。
+        case .harbor: return []
         }
     }
 

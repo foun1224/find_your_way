@@ -40,6 +40,11 @@ SKY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sky_city_magic.png")
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3「NPC→地域分配」）：兩份共用居民 NPC 素材表。
 NPC_1_SHEET = os.path.join(REPO_ROOT, "design", "npc_1.png")
 NPC_2_SHEET = os.path.join(REPO_ROOT, "design", "npc_2.png")
+# 美術流程驗證（`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」試驗）：
+# `design/harbor_test.png`（1086x1448 直式，5 帶）——只有 far 帶含天空（當完整 backdrop），
+# mid/fore/道具都畫在洋紅 `#FF00FF` 底上，可去背後疊出真正的多層視差（取代先前「只渲染
+# far」的過渡 workaround）。harbor 目前只是驗證用地域，不排進 8 地域循環（見 `RegionType`）。
+HARBOR_SHEET = os.path.join(REPO_ROOT, "design", "harbor_test.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -259,6 +264,73 @@ def chroma_key_flood_color(img: Image, bg_color, threshold: int = 30) -> Image:
         stack.append((x, y + 1))
         stack.append((x, y - 1))
 
+    return out
+
+
+def _is_magenta_hued(rgba, g_max: int = 70, min_rb: int = 70, max_rb_diff: int = 60) -> bool:
+    """判斷像素是否「洋紅色系」（不論明暗）：`design/harbor_test.png`（`20` §8A 新流程）
+    mid/fore/道具底色是純洋紅 `#FF00FF`，但陰影/半透明邊緣會把洋紅調暗（例如長椅座板縫隙
+    畫成陰影洋紅 `(139,10,138)`），這類像素亮度已經很低、跟道具本體的深色木頭/鐵件亮度
+    重疊，用亮度或距純洋紅的歐氏距離都分不乾淨。改用色相判斷：洋紅系像素的特徵是
+    「G 遠低於 R、B，且 R≈B」；不論明暗都成立（純洋紅到深洋紅陰影皆然），而道具本體的
+    木頭/石材/金屬色調 R/G/B 不會有這種「G 特別低、R 與 B 又幾乎相等」的組合，能安全區分。
+    """
+    r, g, b, _ = rgba
+    return g <= g_max and min(r, b) >= min_rb and abs(r - b) <= max_rb_diff
+
+
+def remove_magenta_spill(img: Image) -> Image:
+    """`chroma_key_flood_color` 只能挖掉「從畫布邊界 flood-fill 連通」的洋紅像素；道具本體內部
+    被完全包圍、連不到邊界的洋紅色殘留（例如長椅座板/靠背縫隙、噴泉底座陰影，`20` §8A 新流程
+    校準時發現）無法靠 flood-fill 處理到。這裡不管連通性，直接對每個不透明像素做色相判斷
+    （`_is_magenta_hued`），命中就轉透明——因為這些縫隙原本就代表「這裡應該透出後方」，
+    轉透明才是正確效果（而非誤傷道具本體，道具的木頭/金屬色調不會被誤判，見
+    `_is_magenta_hued` 說明）。
+    """
+    w, h = img.width, img.height
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = out.pixels[y][x]
+            if a == 0:
+                continue
+            if _is_magenta_hued((r, g, b, a)):
+                out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
+def patch_magenta_columns(img: Image, tol: int = 75) -> Image:
+    """`design/harbor_test.png` Ground 帶（`20` §8A：地面平台不去背，全層保持不透明）本身
+    在頂緣散布幾處洋紅色缺口（碼頭平台高低落差處露出底下的洋紅畫布，非道具/非要去背的
+    範圍，肉眼校準時發現），若照樣輸出會在石砌碼頭上留下刺眼的洋紅色斑塊。逐欄處理：
+    把每一欄裡洋紅色的像素，用同一欄「最近的非洋紅色像素」（優先往下找——碼頭實體通常在
+    缺口下方，找不到才往上找）取代，等於把旁邊的碼頭紋理「拉」過來蓋住缺口，比留著洋紅色
+    或整塊挖透明都自然（挖透明會在不透去背的地面層開洞，看起來像地面破損）。
+    """
+    w, h = img.width, img.height
+
+    def is_magenta(rgba) -> bool:
+        return _is_magenta_hued(rgba, g_max=tol, min_rb=255 - tol, max_rb_diff=2 * tol)
+
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for x in range(w):
+        col = [out.pixels[y][x] for y in range(h)]
+        magenta_ys = [y for y in range(h) if is_magenta(col[y])]
+        if not magenta_ys:
+            continue
+        for y in magenta_ys:
+            replacement = None
+            for yy in range(y + 1, h):
+                if not is_magenta(col[yy]):
+                    replacement = col[yy]
+                    break
+            if replacement is None:
+                for yy in range(y - 1, -1, -1):
+                    if not is_magenta(col[yy]):
+                        replacement = col[yy]
+                        break
+            if replacement is not None:
+                out.pixels[y][x] = replacement
     return out
 
 
@@ -1170,6 +1242,92 @@ def slice_new_region_bg(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 美術流程驗證（`20_ASSET_SHEET_SPEC.md` §8A）：`design/harbor_test.png`（1086x1448 直式，
+# 5 帶，由 Read 逐帶目視 + 逐像素亮度/連通元件掃描校準，見 scratchpad 校準紀錄）。
+# 與其餘 8 地域素材表版式完全不同（直式、5 帶、mid/fore/道具皆洋紅 `#FF00FF` 底，
+# 只有 far 帶含天空），座標表/去背流程獨立一套，不與 `NEW_REGION_*` 共用。
+# 五帶 y 範圍（逐像素掃描全寬洋紅比例找到的斷點，見校準紀錄）：
+#   Far（含天空，不去背）：  y=0..458    （h=459）
+#   Mid（洋紅底，去背）：    y=459..736  （h=278）
+#   Fore（洋紅底，去背）：   y=737..1043 （h=307，1044..1097 是「Ground」標籤用的洋紅留白，
+#                                          不屬於 Fore/Ground 任一帶內容，捨棄不用）
+#   Ground（石砌碼頭，不去背，只需 `patch_magenta_columns` 補頂緣缺口）：
+#                             y=1098..1243（h=146）
+#   Items（洋紅底道具列，去背）：y=1244..1447（h=204）
+# ---------------------------------------------------------------------------
+HARBOR_BG_FAR = Region(x=0, y=0, w=1086, h=459)
+HARBOR_BG_MID = Region(x=0, y=459, w=1086, h=278)
+HARBOR_BG_FORE = Region(x=0, y=737, w=1086, h=307)
+HARBOR_BG_GROUND = Region(x=0, y=1098, w=1086, h=146)
+HARBOR_ITEMS_REGION = Region(x=0, y=1244, w=1086, h=204)
+
+# 各帶左上角標籤黑底方框（Far/Mid/Fore/Items 皆疊在自己帶的內容/洋紅底上；Ground 的標籤
+# 落在上面捨棄的洋紅留白裡，不出現在 `HARBOR_BG_GROUND` 裁切範圍內，不需要處理）。方框本身
+# 目視校準約 90x40，這裡留餘裕到 110x46（四帶左上角實際內容——Far 雲朵/Mid 城市天際線/
+# Fore 路燈/Items 道具——皆從 x≈95 起才開始，餘裕不會裁到任何合法內容）。
+HARBOR_LABEL_RECT = Region(x=0, y=0, w=110, h=46)
+
+# 道具列 11 個道具座標（逐像素欄投影分段掃描 + 目視命名校準，見 scratchpad 校準紀錄）：
+# 木牌路標／花箱／木桶／盆栽／錨形吊牌路標／藍色旗幟柱／街燈／花缽底座／長椅／市集推車／噴泉。
+HARBOR_PROP_REGIONS: dict = {
+    "signpost": Region(x=15, y=0, w=86, h=204),
+    "planter": Region(x=105, y=0, w=101, h=204),
+    "barrel": Region(x=207, y=0, w=86, h=204),
+    "plant": Region(x=302, y=0, w=85, h=204),
+    "anchor_sign": Region(x=393, y=0, w=100, h=204),
+    "banner": Region(x=504, y=0, w=78, h=204),
+    "lamp": Region(x=585, y=0, w=69, h=204),
+    "flower_urn": Region(x=658, y=0, w=75, h=204),
+    "bench": Region(x=734, y=0, w=118, h=204),
+    "market_cart": Region(x=852, y=0, w=113, h=204),
+    "fountain": Region(x=972, y=0, w=102, h=204),
+}
+_HARBOR_DILATED_PROPS = {"signpost", "anchor_sign", "banner", "lamp", "flower_urn"}
+
+
+def slice_harbor_bg(sheet: Image) -> dict:
+    """海港五帶背景切圖（`20` §8A 新流程驗證）：far 完整含天空、不去背，當獨立 backdrop；
+    mid/fore 洋紅底去背成透明，疊在 far 之前形成真多層視差；ground 不去背，只補頂緣
+    洋紅缺口（`patch_magenta_columns`，見其 docstring 動機）。回傳 `{layer_name: Image}`。
+    """
+    far = patch_label_box(sheet.crop(HARBOR_BG_FAR.x, HARBOR_BG_FAR.y, HARBOR_BG_FAR.w, HARBOR_BG_FAR.h), HARBOR_LABEL_RECT)
+
+    mid_raw = sheet.crop(HARBOR_BG_MID.x, HARBOR_BG_MID.y, HARBOR_BG_MID.w, HARBOR_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, HARBOR_LABEL_RECT)
+    mid = remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))
+
+    fore_raw = sheet.crop(HARBOR_BG_FORE.x, HARBOR_BG_FORE.y, HARBOR_BG_FORE.w, HARBOR_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, HARBOR_LABEL_RECT)
+    fore = remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))
+
+    ground_raw = sheet.crop(HARBOR_BG_GROUND.x, HARBOR_BG_GROUND.y, HARBOR_BG_GROUND.w, HARBOR_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_harbor_props(sheet: Image) -> dict:
+    """海港道具列切圖（`20` §8A）：`chroma_key_flood_color` 洋紅去背 + `remove_magenta_spill`
+    清掉封閉洋紅殘留（同 `slice_harbor_bg` 手法）+ 依 `_HARBOR_DILATED_PROPS` 選細桿件保護
+    （`keep_largest_component_dilated`，防止燈柱/路標/旗桿因去背斷點被誤判成兩段）。
+    """
+    items = sheet.crop(HARBOR_ITEMS_REGION.x, HARBOR_ITEMS_REGION.y, HARBOR_ITEMS_REGION.w, HARBOR_ITEMS_REGION.h)
+    items = patch_label_box(items, HARBOR_LABEL_RECT)
+    out = {}
+    for name, region in HARBOR_PROP_REGIONS.items():
+        w = min(region.w, items.width - region.x)
+        h = min(region.h, items.height - region.y)
+        cropped = items.crop(region.x, region.y, w, h)
+        keyed = remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60))
+        if name in _HARBOR_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -1553,6 +1711,26 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {NPC_2_SHEET} not found, skipping npc_2 slicing")
+
+    # --- 海港（美術流程驗證，`20` §8A）：`design/harbor_test.png`，「洋紅去背 + 真多層視差」
+    # 新流程試驗地域，只供 `FYW_DEBUG_REGION=harbor` 截圖驗收，不排進 8 地域循環。---
+    if os.path.exists(HARBOR_SHEET):
+        harbor_sheet = decode_png(HARBOR_SHEET)
+        print(f"harbor_sheet: {harbor_sheet.width}x{harbor_sheet.height}")
+
+        harbor_bg_dir = os.path.join(OUT_ROOT, "regions", "harbor", "bg")
+        for name, img in slice_harbor_bg(harbor_sheet).items():
+            out_path = os.path.join(harbor_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        harbor_props_dir = os.path.join(OUT_ROOT, "regions", "harbor", "props")
+        for name, img in slice_harbor_props(harbor_sheet).items():
+            out_path = os.path.join(harbor_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {HARBOR_SHEET} not found, skipping harbor region slicing")
 
 
 def inspect(sheet: Image) -> None:

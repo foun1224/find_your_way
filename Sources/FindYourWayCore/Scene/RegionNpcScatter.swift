@@ -81,6 +81,8 @@ public enum RegionNpcScatter {
         case .valley: return valleySlots
         case .skyVillage, .skyCity: return skySlots
         case .riverlands, .highlands, .coastalReach: return []
+        // 海港（`20` §8A 驗證地域，未排入 8 地域循環）：尚無專屬 NPC 分配，暫不配置。
+        case .harbor: return []
         }
     }
 

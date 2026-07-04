@@ -24,6 +24,11 @@ public enum RegionType: Equatable, CaseIterable {
     case skyVillage
     /// 天空魔法城（`design/sky_city_magic.png`，金色魔法水晶城），美術大改版第 2 波新增。
     case skyCity
+    /// 海港（`design/harbor_test.png`，`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」
+    /// 美術流程驗證地域）：只有遠景含天空，中景/前景/道具皆洋紅底去背成透明，可疊出真正的
+    /// 多層視差（`isLayered`）。只供 `FYW_DEBUG_REGION=harbor` 截圖驗收，**不排進 8 地域循環**
+    /// （`cycle` 不含它，`Region.at` 永遠不會選到）。
+    case harbor
 
     /// 美術大改版第 2 波上線序列（`21` §2）：8 地域循環，旅程節奏由近人到奇幻——
     /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 海城 → 天空村莊 → 天空魔法城 → （回到草原）。
@@ -59,8 +64,19 @@ public enum RegionType: Equatable, CaseIterable {
         case .village3: return "village_3"
         case .skyVillage: return "sky_village"
         case .skyCity: return "sky_city"
+        case .harbor: return "harbor"
         }
     }
+
+    /// 「真多層視差」地域集合（`20_ASSET_SHEET_SPEC.md` §8A 新美術流程）：這些地域的
+    /// mid/fore 素材是**透明去背過的獨立物件層**（非各自含天空的完整場景），
+    /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
+    /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
+    /// far+ground」的過渡 workaround。目前只有 `harbor`（驗證用，未排進 8 地域循環）。
+    private static let layeredRegions: Set<RegionType> = [.harbor]
+
+    /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。
+    public var isLayered: Bool { RegionType.layeredRegions.contains(self) }
 }
 
 /// Region 選擇（純函式）：`bandIndex = floor(distance / regionLength)` + 確定性序列。

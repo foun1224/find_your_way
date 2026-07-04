@@ -66,17 +66,8 @@ public enum ParallaxBackground {
         else {
             return nil
         }
-        // `mid`/`fore` 素材本身各是一條「含自己天空的完整場景」（非可疊加延伸片段），過去把
-        // far/mid/fore 依高度垂直堆疊會在畫面中同時露出多條天空+地平線、層間硬接縫，變成
-        // 「橫條拼貼」而非單一連貫場景（見本檔案上方 `18` 之後、Fable 截圖診斷）。
-        // 修法：只用 `far`（最遠、涵蓋最廣的完整場景）當唯一 backdrop，等比放大到「填滿場景高度」
-        // 鋪滿整個視窗、慢速視差；`mid`/`fore` 仍照常存在於硬碟（其他用途/未來可能重啟用），
-        // 只是不再建節點渲染，避免視覺雜訊。`mid` texture 仍在 guard 中被要求存在，作為
-        // 「這是一個資源完整的地域」的完整性檢查，維持向下相容（不因拿掉 mid 渲染而放寬地域
-        // 資源需求）。
-        _ = midTexture
         let foreTexture = ArtCatalog.texture(relativePath: base + "fore.png")
-        _ = foreTexture
+        let region = RegionType.allCases.first { $0.assetFolder == regionFolder } ?? .meadowOrigin
 
         let container = SKNode()
         parent.addChild(container)
@@ -93,6 +84,39 @@ public enum ParallaxBackground {
             scale: farScale, bottomY: 0, zPosition: -30, layerFactor: 0.2
         )
         layers.append(far)
+
+        if region.isLayered {
+            // 真多層視差（`20_ASSET_SHEET_SPEC.md` §8A 新美術流程驗證，`RegionType.isLayered`）：
+            // mid/fore 素材是洋紅去背過的**透明**中景/前景物件層（非各自含天空的完整場景），
+            // 可以直接疊在 far backdrop 之前形成正確景深，不會像舊格式那樣露出多條天空線
+            // （見下方 else 分支「過渡 workaround」的歷史說明）。三層共用同一個由
+            // 「地面顯示高度」換算出的 `scale`，維持像素密度一致；底緣都貼齊地面線
+            // （`bottomY: 0`），只靠 `zPosition` 前後疊放順序 + 各自 `layerFactor` 呈現深度。
+            let mid = buildLayer(
+                in: container, sceneWidth: Double(size.width), texture: midTexture,
+                scale: scale, bottomY: 0, zPosition: -20, layerFactor: 0.45
+            )
+            layers.append(mid)
+
+            if let foreTexture {
+                let fore = buildLayer(
+                    in: container, sceneWidth: Double(size.width), texture: foreTexture,
+                    scale: scale, bottomY: 0, zPosition: -15, layerFactor: 0.65
+                )
+                layers.append(fore)
+            }
+        } else {
+            // `mid`/`fore` 素材本身各是一條「含自己天空的完整場景」（非可疊加延伸片段），過去把
+            // far/mid/fore 依高度垂直堆疊會在畫面中同時露出多條天空+地平線、層間硬接縫，變成
+            // 「橫條拼貼」而非單一連貫場景（見本檔案上方 `18` 之後、Fable 截圖診斷）。
+            // 修法：只用 `far`（最遠、涵蓋最廣的完整場景）當唯一 backdrop，等比放大到「填滿場景
+            // 高度」鋪滿整個視窗、慢速視差；`mid`/`fore` 仍照常存在於硬碟（其他用途/未來可能
+            // 隨美術改版轉成 `isLayered` 重啟用），只是不再建節點渲染，避免視覺雜訊。`mid`
+            // texture 仍在 guard 中被要求存在，作為「這是一個資源完整的地域」的完整性檢查，
+            // 維持向下相容（不因拿掉 mid 渲染而放寬地域資源需求）。
+            _ = midTexture
+            _ = foreTexture
+        }
 
         let ground = buildLayer(
             in: container, sceneWidth: Double(size.width), texture: groundTexture,
