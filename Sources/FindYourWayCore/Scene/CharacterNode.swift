@@ -15,8 +15,13 @@ public final class CharacterNode: SKSpriteNode {
     /// `anchorPoint = (0.5, 0)`，`screenY` 即角色腳邊落在地面平台頂線的位置。
     public static let displayHeight: CGFloat = 44
 
-    /// 走路 frame 節奏（每格秒數），對應 6–8fps 的悠閒感（1/7 秒 ≈ 7fps）。
-    private static let stepInterval: TimeInterval = 1.0 / 7.0
+    /// 走路 frame 節奏（每格秒數）。臨時版放慢到 ~5fps 的悠閒踏步。
+    private static let stepInterval: TimeInterval = 1.0 / 5.0
+
+    /// 臨時走路幀順序（`right_*` 的索引）：現有 5 幀中 0/3/4 都是「同一隻腳跨步」、1/2 是併攏，
+    /// 缺「另一隻腳往前」的幀 → 全部連播會像一直踏同一步（抖動）。此處挑「跨步(3)→併攏(2)」
+    /// 做乾淨 2 拍循環，消除抖動。真正的左右交替需重生素材。空/越界時退回全部幀。
+    private static let walkFrameOrder: [Int] = [3, 2]
 
     /// 暖心回應動作 key（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不影響任何邏輯狀態）。
     private static let warmResponseKey = "warmResponse"
@@ -60,7 +65,10 @@ public final class CharacterNode: SKSpriteNode {
         for texture in textures {
             texture.filteringMode = .nearest
         }
-        let animate = SKAction.animate(with: textures, timePerFrame: Self.stepInterval, resize: false, restore: false)
+        // 臨時：依 walkFrameOrder 挑幀，避免同姿勢連播抖動；越界索引丟棄，若挑不到則退回全部幀。
+        let ordered = Self.walkFrameOrder.filter { $0 >= 0 && $0 < textures.count }.map { textures[$0] }
+        let frames = ordered.count >= 2 ? ordered : textures
+        let animate = SKAction.animate(with: frames, timePerFrame: Self.stepInterval, resize: false, restore: false)
         run(SKAction.repeatForever(animate), withKey: "walkCycle")
     }
 
