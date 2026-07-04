@@ -13,3 +13,5 @@ Resources/art/
 
 # emilkowalski design skills（npx skills add 安裝，可重裝）
 .agents/
+
+scripts/__pycache__/
