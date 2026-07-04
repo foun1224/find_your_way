@@ -27,13 +27,18 @@ public enum RegionType: Equatable, CaseIterable {
 
     /// 地域對應的美術資源夾名稱（`Resources/art/regions/<name>/`，`18` §1 / `19` §1）：
     /// `ParallaxBackground`/`PropScatter` 依此挑該地域的背景/地面/道具。尚無美術的骨架地域
-    /// （riverlands/highlands/coastalReach）暫時歸類回 meadow 資源夾；`Region.at` 目前不會選到
-    /// 它們（`cycle` 只有 meadow/kingdom/seaCity），這裡只是保底、避免未來誤用時找不到資源夾。
+    /// （riverlands/highlands/coastalReach）暫時歸類回 grassland 資源夾；`Region.at` 目前不會選到
+    /// 它們（`cycle` 只有 meadowOrigin/kingdom/seaCity），這裡只是保底、避免未來誤用時找不到資源夾。
+    ///
+    /// **美術大改版第 1 波**（`21_ASSET_OVERHAUL_PLAN.md` §4）：`meadowOrigin` 改指到
+    /// `"grassland"`（取代舊 `"meadow"` 資源夾，`design/grassland.png` 切出的新草原美術，
+    /// `scripts/slice_assets.py` 的 `slice_grassland_props`）。`RegionType` 的 case 名稱本身
+    /// 保留 `meadowOrigin`（沿用既有測試/呼叫端命名，不做無謂 churn），只換它指向的資源夾。
     public var assetFolder: String {
         switch self {
         case .kingdom: return "kingdom"
         case .seaCity: return "sea_city"
-        case .meadowOrigin, .riverlands, .highlands, .coastalReach: return "meadow"
+        case .meadowOrigin, .riverlands, .highlands, .coastalReach: return "grassland"
         }
     }
 }

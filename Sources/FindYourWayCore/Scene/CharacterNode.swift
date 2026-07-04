@@ -15,13 +15,8 @@ public final class CharacterNode: SKSpriteNode {
     /// `anchorPoint = (0.5, 0)`，`screenY` 即角色腳邊落在地面平台頂線的位置。
     public static let displayHeight: CGFloat = 44
 
-    /// 走路 frame 節奏（每格秒數）。臨時版放慢到 ~5fps 的悠閒踏步。
+    /// 走路 frame 節奏（每格秒數）。~5fps 的悠閒踏步。
     private static let stepInterval: TimeInterval = 1.0 / 5.0
-
-    /// 臨時走路幀順序（`right_*` 的索引）：現有 5 幀中 0/3/4 都是「同一隻腳跨步」、1/2 是併攏，
-    /// 缺「另一隻腳往前」的幀 → 全部連播會像一直踏同一步（抖動）。此處挑「跨步(3)→併攏(2)」
-    /// 做乾淨 2 拍循環，消除抖動。真正的左右交替需重生素材。空/越界時退回全部幀。
-    private static let walkFrameOrder: [Int] = [3, 2]
 
     /// 暖心回應動作 key（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不影響任何邏輯狀態）。
     private static let warmResponseKey = "warmResponse"
@@ -111,15 +106,16 @@ public final class CharacterNode: SKSpriteNode {
 
     /// 走路 texture 循環：純粹「原地走路」的視覺表現，不驅動任何邏輯座標
     /// （里程由 `GameState.distance` 決定，`WorldScroll` 換算世界捲動）。
+    ///
+    /// 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：`main_role.png` 「向右」欄的
+    /// 3 排姿勢（站姿／跨步走／持物）本身就是三個不同姿勢，不像舊 `asset_sheet.png` 那樣
+    /// 有重複/缺幀的問題，直接依序全部播放即可構成有交替感的循環，不需要再挑幀去重。
     private func runWalkAnimation(textures: [SKTexture]) {
         guard !textures.isEmpty else { return }
         for texture in textures {
             texture.filteringMode = .nearest
         }
-        // 臨時：依 walkFrameOrder 挑幀，避免同姿勢連播抖動；越界索引丟棄，若挑不到則退回全部幀。
-        let ordered = Self.walkFrameOrder.filter { $0 >= 0 && $0 < textures.count }.map { textures[$0] }
-        let frames = ordered.count >= 2 ? ordered : textures
-        let animate = SKAction.animate(with: frames, timePerFrame: Self.stepInterval, resize: false, restore: false)
+        let animate = SKAction.animate(with: textures, timePerFrame: Self.stepInterval, resize: false, restore: false)
         run(SKAction.repeatForever(animate), withKey: "walkCycle")
     }
 

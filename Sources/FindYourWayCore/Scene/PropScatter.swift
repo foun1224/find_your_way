@@ -23,19 +23,24 @@ public enum PropScatter {
     /// 循環週期（點）：需 ≥ 一般場景寬度，確保畫面永遠有道具覆蓋、不會忽然露出一片空。
     public static let span: Double = 900
 
-    /// 草原地域固定槽位表（Phase 4b；`18_STAGE_B_SPEC.md` §1 地域化後為 `meadow` 地域專用）：
+    /// 草原地域固定槽位表（Phase 4b；`18_STAGE_B_SPEC.md` §1 地域化後為 `meadow`/`grassland`
+    /// 地域專用；美術大改版第 1 波 `21_ASSET_OVERHAUL_PLAN.md` §4 換成 `design/grassland.png`
+    /// 切出的新道具池，取代舊 `asset_sheet.png` 道具）：
     /// 間距與道具種類皆手動排定（確定性、可讀性優先於程式生成的隨機分佈）。依 `baseX` 遞增排列。
-    /// 保留 `slots` 這個名字（而非改名 `meadowSlots`）：既有呼叫端/測試（`PropScatterTests`）
+    /// 保留 `slots` 這個名字（而非改名 `grasslandSlots`）：既有呼叫端/測試（`PropScatterTests`）
     /// 直接讀這個屬性，重新命名沒有額外好處、只會增加不必要的 churn。
     public static let slots: [Slot] = [
-        Slot(baseX: 40, propName: "bush"),
-        Slot(baseX: 150, propName: "rock"),
-        Slot(baseX: 250, propName: "grass"),
-        Slot(baseX: 340, propName: "fence"),
-        Slot(baseX: 480, propName: "haystack"),
-        Slot(baseX: 600, propName: "flower"),
-        Slot(baseX: 700, propName: "barrel_small"),
-        Slot(baseX: 800, propName: "crate_medium"),
+        Slot(baseX: 40, propName: "tree"),
+        Slot(baseX: 130, propName: "signpost"),
+        Slot(baseX: 210, propName: "well"),
+        Slot(baseX: 300, propName: "banner"),
+        Slot(baseX: 380, propName: "haycart"),
+        Slot(baseX: 470, propName: "planter"),
+        Slot(baseX: 550, propName: "barrel"),
+        Slot(baseX: 630, propName: "market_stall"),
+        Slot(baseX: 730, propName: "crate"),
+        Slot(baseX: 810, propName: "windmill"),
+        Slot(baseX: 870, propName: "monolith"),
     ]
 
     /// 王國首都地域槽位表（`18` §1/§3，`19_STAGE_C_SPEC.md` §1 王國環境重切後更新）：

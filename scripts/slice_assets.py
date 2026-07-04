@@ -21,6 +21,10 @@ ASSET_SHEET = os.path.join(REPO_ROOT, "design", "assets", "asset_sheet.png")
 KINGDOM_SHEET = os.path.join(REPO_ROOT, "design", "kingdom.png")
 KINGDOM_CHARACTERS_SHEET = os.path.join(REPO_ROOT, "design", "kingdom_characters.png")
 SEA_CITY_SHEET = os.path.join(REPO_ROOT, "design", "sea_city.png")
+# 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：主角/旅伴/草原三份新素材表。
+MAIN_ROLE_SHEET = os.path.join(REPO_ROOT, "design", "main_role.png")
+RESOURCE_V2_SHEET = os.path.join(REPO_ROOT, "design", "resource_v2.png")
+GRASSLAND_SHEET = os.path.join(REPO_ROOT, "design", "grassland.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -414,6 +418,16 @@ def remove_small_components(img: Image, min_area: int = 12) -> Image:
     return out
 
 
+def flip_horizontal(img: Image) -> Image:
+    """左右鏡像翻轉（美術大改版第 1 波用途：`design/resource_v2.png` 的「主角-女」走路/待機幀
+    本體朝**左**走——素材表沒有畫向右走的版本，只能用向左幀水平鏡像取代，產出旅伴的
+    `char_companion/right_*.png`。純幾何鏡像、不影響去背/裁邊結果，鏡像後角色朝右，
+    與主角 `main_role.png` 的「向右」欄一致。）
+    """
+    out = Image(img.width, img.height, [list(reversed(row)) for row in img.pixels])
+    return out
+
+
 def autocrop(img: Image) -> Image:
     """裁到非透明像素的 bounding box；若全透明則回傳原圖。"""
     min_x, min_y = img.width, img.height
@@ -474,22 +488,11 @@ class Region:
     h: int
 
 
-# 主角（金髮藍衫）「向右」列：目視校準——標籤欄約到 x=95，列高約 92px，
-# 4 排（向右/向左/向前/向後）從 y≈40 起、每排約 92px；5 格等寬跨列 x 95..480。
-HERO_RIGHT_ROW = Region(x=95, y=42, w=390, h=90)
-HERO_RIGHT_FRAME_COUNT = 5
-
-# 主角「向前」列（第 3 排，面向觀看者）：與「向右」同一 x 範圍、同寬 5 格，
-# 列距目視校準約 92px/排（向右 y=42 → 向左 y≈134 → 向前 y≈226 → 向後 y≈318）；
-# 已用 `--inspect` 之外的獨立裁切校驗（見 scratchpad 交叉檢查），y=226,h=90 完整框住
-# 頭頂到鞋底、左右不切邊。此列供「偶爾看向使用者」微行為使用（`13_PSYCH_AUDIT.md` P1/P2）。
-HERO_FRONT_ROW = Region(x=95, y=226, w=390, h=90)
-HERO_FRONT_FRAME_COUNT = 5
-
-# 旅伴（藍衫紅披風）「向右」列：與主角同一 y 帶（同一排「向右」），x 落在主角區塊之後、
-# 道具區塊之前；4 格（旅伴只有 4 走路 frame，主角 5 格）。目視校準見 Phase 4b 校準紀錄。
-COMPANION_RIGHT_ROW = Region(x=650, y=42, w=320, h=90)
-COMPANION_RIGHT_FRAME_COUNT = 4
+# 主角「向右」列 / 旅伴「向右」列的舊座標表（`asset_sheet.png`）已隨美術大改版第 1 波
+# （`21_ASSET_OVERHAUL_PLAN.md` §4）作廢——主角/旅伴改讀 `design/main_role.png` /
+# `design/resource_v2.png`，座標表見下方「美術大改版第 1 波」章節
+# （`MAIN_ROLE_RIGHT_ROWS` / `MAIN_ROLE_FRONT_ROWS` / `RESOURCE_V2_FEMALE_WALK_FRAMES`）。
+# `asset_sheet.png` 的角色列本身保留在圖檔中未變，只是程式不再讀取。
 
 # 道具／互動物件（Phase 4b `12_PHASE4_SPEC.md` §1/§6）：素材表右上角三排。
 # 每個道具各自獨立裁切區（而非整排切格）——因為道具尺寸/間距不一（不像角色走路 frame 等寬等距），
@@ -586,33 +589,79 @@ KINGDOM_PROP_REGIONS: dict = {
 }
 
 
-def slice_walk_row(sheet: Image, region: Region, frame_count: int) -> list:
-    """依 `region` 裁出一整排走路 frame、去背，再依透明間隙切成 `frame_count` 格並各自 autocrop。
-    共用邏輯，供主角/旅伴兩排走路動畫共用（`12` §1）。
+# ---------------------------------------------------------------------------
+# 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：主角 = design/main_role.png、
+# 旅伴 = design/resource_v2.png 的「主角-女（冒險者）」走路幀。
+# ---------------------------------------------------------------------------
+
+# `main_role.png`（1536x1024，近黑底 #15171 系）版面：頂部標題列 + 4 欄（向右/向左/向前/背面）
+# 標籤列 + 3 排姿勢（每排一種 pose：站姿／跨步走／持物），由逐像素亮度列/欄投影校準
+# （見 scratchpad 校準紀錄）：
+#   欄：向右 x≈220-370、向左 x≈540-680、向前 x≈850-1030、背面 x≈1180-1320
+#   排：第1排 y≈190-440、第2排 y≈470-700、第3排 y≈730-960
+# 本波只取「向右」（走路循環）與「向前」（待機/看你）兩欄，「向左」「背面」暫不用（`21` §4）。
+MAIN_ROLE_RIGHT_ROWS = [
+    Region(x=210, y=185, w=170, h=260),
+    Region(x=210, y=465, w=170, h=250),
+    Region(x=210, y=725, w=170, h=245),
+]
+MAIN_ROLE_FRONT_ROWS = [
+    Region(x=840, y=185, w=200, h=260),
+    Region(x=840, y=465, w=200, h=250),
+    Region(x=840, y=725, w=200, h=245),
+]
+
+
+def slice_main_role_column(sheet: Image, rows: list) -> list:
+    """裁出 `main_role.png` 某一欄（向右或向前）的 3 排姿勢，各自去背/去雜點/autocrop。
+    `main_role.png` 背景近黑（同 `asset_sheet.png` 系），沿用 `chroma_key_flood` 去背流程；
+    每排是單一姿勢（非同一姿勢的多張走路 frame），故不需要 `segment_row_by_gaps` 這種
+    「一排切多格」的邏輯，直接整塊裁切即可。
+
+    用 `keep_largest_component_dilated` 而非單純 `keep_largest_component`：校準時發現
+    「向前」姿勢的頭部與身體之間的頸部連接處，去背後偶爾只剩 1px 連通，`chroma_key_flood`
+    的 flood-fill 在該處會把頭部與身體分成兩個獨立連通塊，`keep_largest_component`
+    （只留最大塊）會直接把整顆頭砍掉、只留下軀幹——跟燈柱細桿斷裂是同一類問題
+    （`21_ASSET_OVERHAUL_PLAN.md` §5「細桿件用 keep_largest_component_dilated 防去斑咬斷」，
+    頸部連接處本質上也是一種「細桿件」）。膨脹後的連通判斷能跨過這種 1-2px 斷點，
+    且膨脹只影響「誰被判定為最大塊」，不影響最終保留哪些像素（見其 docstring）。
     """
-    row_img = sheet.crop(region.x, region.y, region.w, region.h)
-    keyed = chroma_key_flood(row_img, threshold=28)
-    keyed = despeckle_neutral_residue(keyed)
-    segments = segment_row_by_gaps(keyed, frame_count)
     frames = []
-    for (sx, sw) in segments:
-        frame = keyed.crop(sx, 0, sw, keyed.height)
-        frame = keep_largest_component(frame)
-        frame = autocrop(frame)
-        frames.append(frame)
+    for region in rows:
+        cropped = sheet.crop(region.x, region.y, region.w, region.h)
+        keyed = chroma_key_flood(cropped, threshold=28)
+        keyed = despeckle_neutral_residue(keyed)
+        keyed = keep_largest_component_dilated(keyed, dilate_px=3)
+        frames.append(autocrop(keyed))
     return frames
 
 
-def slice_hero_right(sheet: Image) -> list:
-    return slice_walk_row(sheet, HERO_RIGHT_ROW, HERO_RIGHT_FRAME_COUNT)
+# `resource_v2.png`（1536x1024，**白底**，與其餘素材表的近黑底不同，去背需用
+# `chroma_key_flood_color` 指定白色背景）版面：「主角-女（冒險者）」走路列，逐像素欄投影
+# 校準（見 scratchpad 校準紀錄）抓出 8 個等寬 frame 的 x 範圍，y 帶 503..593（含頭頂到鞋底，
+# 上下留一點餘裕）。**素材本體朝左走**（沒有畫朝右的版本）——切出後用 `flip_horizontal`
+# 水平鏡像成朝右，才能當旅伴「向右走路」用（與主角 `main_role.png` 的「向右」欄方向一致）。
+RESOURCE_V2_FEMALE_WALK_ROW_Y = 503
+RESOURCE_V2_FEMALE_WALK_ROW_H = 90
+RESOURCE_V2_FEMALE_WALK_FRAME_XS = [112, 217, 316, 412, 517, 611, 704, 792]
+RESOURCE_V2_FEMALE_WALK_FRAME_W = 60
 
 
-def slice_hero_front(sheet: Image) -> list:
-    return slice_walk_row(sheet, HERO_FRONT_ROW, HERO_FRONT_FRAME_COUNT)
-
-
-def slice_companion_right(sheet: Image) -> list:
-    return slice_walk_row(sheet, COMPANION_RIGHT_ROW, COMPANION_RIGHT_FRAME_COUNT)
+def slice_resource_v2_companion_walk(sheet: Image) -> list:
+    """裁出 `resource_v2.png` 女冒險者走路列的 8 個 frame，去背（白底）+ 去雜點 + autocrop，
+    再水平鏡像成向右（素材本體朝左，見上方欄位說明），供旅伴 `char_companion/right_*.png` 用。
+    """
+    frames = []
+    for x in RESOURCE_V2_FEMALE_WALK_FRAME_XS:
+        w = min(RESOURCE_V2_FEMALE_WALK_FRAME_W, sheet.width - x)
+        cropped = sheet.crop(x, RESOURCE_V2_FEMALE_WALK_ROW_Y, w, RESOURCE_V2_FEMALE_WALK_ROW_H)
+        keyed = chroma_key_flood_color(cropped, (255, 255, 255), threshold=40)
+        # `keep_largest_component_dilated`（同 `slice_main_role_column` 說明）：防止頭部與
+        # 身體間的頸部連接處因去背斷開 1-2px 而被判定成兩個連通塊，導致頭被誤刪。
+        keyed = keep_largest_component_dilated(keyed, dilate_px=3)
+        keyed = autocrop(keyed)
+        frames.append(flip_horizontal(keyed))
+    return frames
 
 
 def slice_props(sheet: Image) -> dict:
@@ -652,6 +701,26 @@ def patch_label_box(img: Image, rect: "Region") -> Image:
     for y in range(max(0, rect.y), min(img.height, rect.y + rect.h)):
         for x in range(max(0, rect.x), min(img.width, rect.x + rect.w)):
             out.pixels[y][x] = out.pixels[src_y][x]
+    return out
+
+
+def patch_label_box_horizontal(img: Image, rect: "Region") -> Image:
+    """`patch_label_box` 的水平版：把 `rect` 這塊區域用「`rect` 正右方同一列」的像素往左貼過來
+    （逐 row 各自抓自己那一列 `rect.x + rect.w` 處的像素，而非單一列垂直重複）。
+
+    動機（草原 `design/grassland.png` 地面平台層「地面平台」標籤方框）：`patch_label_box`
+    假設方框所在區域背景是「垂直方向變化平緩」的漸層（天空/牆面），單一列垂直重複貼滿
+    在那種場景下不明顯；但地面平台層本身是「草地/泥土路徑」紋理，同一行內左右紋理相近、
+    但同一列的上下紋理變化劇烈（石板/雜草/陰影交錯），垂直重複反而會貼出一塊突兀的
+    平頂色塊。地面紋理沿水平方向大致重複（本來就要做水平無縫平鋪），改成「抓方框右側同一
+    列」逐行取代，貼出來的內容跟方框正下方的真實地面紋理在垂直方向上完全對齊、只是左右
+    平移，視覺上遠比垂直重複貼近「這裡本來就是草地」的樣子。
+    """
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    src_x = min(img.width - 1, rect.x + rect.w)
+    for y in range(max(0, rect.y), min(img.height, rect.y + rect.h)):
+        for x in range(max(0, rect.x), min(img.width, rect.x + rect.w)):
+            out.pixels[y][x] = out.pixels[y][src_x]
     return out
 
 
@@ -847,6 +916,92 @@ def slice_sea_city_props(sheet: Image) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 草原地域座標設定表（美術大改版第 1 波，`21_ASSET_OVERHAUL_PLAN.md` §4，取代 meadow，
+# 由 Read design/grassland.png 目視 + 逐像素亮度/連通元件掃描校準，1536x1024）。
+# ---------------------------------------------------------------------------
+
+# 版式與 kingdom.png/sea_city.png 相同（無留白邊界欄，內容滿版到左右畫布邊緣；每層/道具列
+# 左上角疊「遠景/中景/前景/地面平台/道具素材」標籤黑底方框）。背景四層 y 範圍以逐像素亮度
+# 斷點交叉校準（見 scratchpad 校準紀錄）：
+#   遠景（浮空島+雪山+遠丘）：      y=0..234
+#   中景（風車村+石橋+河谷）：      y=234..452
+#   前景（石屋市集+旗幟+井+攤販）： y=452..666
+#   地面平台（石磚步道+青苔矮牆）： y=666..788（789 起「道具素材」標籤方框開始疊在道具列畫布上）
+GRASSLAND_BG_FAR = Region(x=0, y=0, w=1536, h=234)
+GRASSLAND_BG_MID = Region(x=0, y=234, w=1536, h=218)
+GRASSLAND_BG_FORE = Region(x=0, y=452, w=1536, h=214)
+GRASSLAND_BG_GROUND = Region(x=0, y=666, w=1536, h=122)
+
+# 各層左上角標籤方框（同 `KINGDOM_LABEL_BOX_RECTS`/`SEA_CITY_LABEL_BOX_RECTS` 手法，相對於
+# 該層裁切後的區域座標；四層都有方框疊在內容左上角，含地面平台——與 kingdom/sea_city 不同，
+# 這裡「地面平台」文字方框確實疊在地面平台層本身而非道具列畫布上，需一併 patch）。
+GRASSLAND_LABEL_BOX_RECTS: dict = {
+    "far": Region(x=0, y=0, w=150, h=48),
+    "mid": Region(x=0, y=0, w=150, h=48),
+    "fore": Region(x=0, y=0, w=150, h=48),
+    "ground": Region(x=0, y=15, w=115, h=38),
+}
+
+GRASSLAND_BG_MID_TOP_FADE_PX = 18
+GRASSLAND_BG_FORE_TOP_FADE_PX = 14
+
+# 道具列（y=790..1024，近黑色畫布，同 kingdom/sea_city 手法）：11 個獨立道具，逐一用
+# 「欄有無亮於背景像素」連通分段掃描抓出候選 x 範圍（見 scratchpad 校準紀錄），
+# 命名依實際外觀（樹/旗幟/路標/井/貨車/花箱/桶/攤/箱/風車/立石）。
+GRASSLAND_PROP_REGIONS: dict = {
+    "tree": Region(x=5, y=790, w=207, h=234),
+    "banner": Region(x=235, y=790, w=85, h=234),
+    "signpost": Region(x=343, y=790, w=85, h=234),
+    "well": Region(x=454, y=790, w=112, h=234),
+    "haycart": Region(x=580, y=790, w=144, h=234),
+    "planter": Region(x=746, y=790, w=112, h=234),
+    "barrel": Region(x=883, y=790, w=69, h=234),
+    "market_stall": Region(x=977, y=790, w=170, h=234),
+    "crate": Region(x=1153, y=790, w=109, h=234),
+    "windmill": Region(x=1279, y=790, w=124, h=234),
+    "monolith": Region(x=1414, y=790, w=100, h=234),
+}
+
+# `tree` 唯一框到「道具素材」標籤方框的道具（方框疊在樹冠左上角，見 `slice_grassland_props`
+# 校準時的觀察，其餘道具的裁切區右移過標籤範圍不受影響）——用 exclude rect 蓋掉再去背，
+# 手法同 `_KINGDOM_PROP_EXCLUDE_RECTS`。
+_GRASSLAND_PROP_EXCLUDE_RECTS: dict = {
+    "tree": [Region(x=0, y=0, w=145, h=50)],
+}
+
+# 去雜點策略（同 `_KINGDOM_LARGEST_COMPONENT_PROPS`/`_SEA_CITY_LARGEST_COMPONENT_PROPS` 說明）：
+# 細桿件（旗桿/路標柱/井頂支架/貨車輪輻/風車軸）用 `keep_largest_component_dilated`
+# 防止色距去背把細桿攔腰挖空、誤刪成兩截（`21` §5「細桿件用 keep_largest_component_dilated
+# 防去斑咬斷」）；其餘本身就有多個分離部件（樹叢+柵欄+花、花箱花叢、市集攤位+籃子蔬果、
+# 立石+base 花叢、箱子+小綠植）的道具用 `remove_small_components` 保留分離部件。
+_GRASSLAND_DILATED_PROPS = {"banner", "signpost", "well", "haycart", "windmill"}
+_GRASSLAND_NEIGHBOR_DEBRIS_MIN_AREA = 30
+
+# 草原道具列畫布背景色（同 `_KINGDOM_PROP_BG_COLOR`/`_SEA_CITY_PROP_BG_COLOR` 說明，逐像素
+# 取樣畫布角落確認）。
+_GRASSLAND_PROP_BG_COLOR = (15, 29, 37)
+
+
+def slice_grassland_props(sheet: Image) -> dict:
+    """草原道具切圖：座標表 `GRASSLAND_PROP_REGIONS`，去背用 `chroma_key_flood_color`
+    （理由同 `_KINGDOM_PROP_BG_COLOR`），去雜點/去鄰居碎片策略見 `_GRASSLAND_DILATED_PROPS` 說明。"""
+    out = {}
+    for name, region in GRASSLAND_PROP_REGIONS.items():
+        w = min(region.w, sheet.width - region.x)
+        h = min(region.h, sheet.height - region.y)
+        cropped = sheet.crop(region.x, region.y, w, h)
+        if name in _GRASSLAND_PROP_EXCLUDE_RECTS:
+            cropped = _apply_exclude_rects(cropped, _GRASSLAND_PROP_EXCLUDE_RECTS[name])
+        keyed = chroma_key_flood_color(cropped, _GRASSLAND_PROP_BG_COLOR, threshold=16)
+        if name in _GRASSLAND_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=_GRASSLAND_NEIGHBOR_DEBRIS_MIN_AREA)
+        out[name] = autocrop(keyed)
+    return out
+
+
 def pad_to_common_size(frames: list) -> list:
     """把一組 frame pad 成相同尺寸（以最大寬高為準、水平置中、底部對齊）避免走路動畫抖動。"""
     if not frames:
@@ -891,31 +1046,58 @@ def main() -> None:
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
 
-    # --- 主角向右走路 frame ---
-    frames = slice_hero_right(sheet)
-    frames = pad_to_common_size(frames)
+    # --- 主角向右走路 frame + 向前（面向觀看者）frame（美術大改版第 1 波，`21` §4：
+    # 主角改讀 design/main_role.png，取代舊 asset_sheet.png 角色列）---
     char_dir = os.path.join(OUT_ROOT, "char_hero")
-    for i, frame in enumerate(frames):
-        out_path = os.path.join(char_dir, f"right_{i}.png")
-        encode_png(frame, out_path)
-        print(f"wrote {out_path} ({frame.width}x{frame.height})")
+    if os.path.exists(MAIN_ROLE_SHEET):
+        main_role_sheet = decode_png(MAIN_ROLE_SHEET)
+        print(f"main_role_sheet: {main_role_sheet.width}x{main_role_sheet.height}")
 
-    # --- 主角向前（面向觀看者）frame：供「偶爾看向使用者」微行為使用 ---
-    front_frames = slice_hero_front(sheet)
-    front_frames = pad_to_common_size(front_frames)
-    for i, frame in enumerate(front_frames):
-        out_path = os.path.join(char_dir, f"front_{i}.png")
-        encode_png(frame, out_path)
-        print(f"wrote {out_path} ({frame.width}x{frame.height})")
+        # 重切前先清掉舊的 numbered 幀：新素材幀數可能比舊的少（如舊 5 幀→新 3 幀），
+        # 殘留的舊 right_3/right_4 會被 CharacterNode 的 sequentialTextures 一併載入、
+        # 把新舊角色混進走路循環而閃爍。
+        if os.path.isdir(char_dir):
+            for _f in os.listdir(char_dir):
+                if (_f.startswith("right_") or _f.startswith("front_")) and _f.endswith(".png"):
+                    os.remove(os.path.join(char_dir, _f))
 
-    # --- 旅伴向右走路 frame（Phase 4b）---
-    companion_frames = slice_companion_right(sheet)
-    companion_frames = pad_to_common_size(companion_frames)
+        hero_frames = slice_main_role_column(main_role_sheet, MAIN_ROLE_RIGHT_ROWS)
+        hero_frames = pad_to_common_size(hero_frames)
+        for i, frame in enumerate(hero_frames):
+            out_path = os.path.join(char_dir, f"right_{i}.png")
+            encode_png(frame, out_path)
+            print(f"wrote {out_path} ({frame.width}x{frame.height})")
+
+        hero_front_frames = slice_main_role_column(main_role_sheet, MAIN_ROLE_FRONT_ROWS)
+        hero_front_frames = pad_to_common_size(hero_front_frames)
+        for i, frame in enumerate(hero_front_frames):
+            out_path = os.path.join(char_dir, f"front_{i}.png")
+            encode_png(frame, out_path)
+            print(f"wrote {out_path} ({frame.width}x{frame.height})")
+    else:
+        print(f"note: {MAIN_ROLE_SHEET} not found, skipping hero slicing")
+
+    # --- 旅伴向右走路 frame（美術大改版第 1 波，`21` §4：旅伴改讀 design/resource_v2.png
+    # 的「主角-女（冒險者）」走路幀，取代舊 asset_sheet.png 角色列）---
     companion_dir = os.path.join(OUT_ROOT, "char_companion")
-    for i, frame in enumerate(companion_frames):
-        out_path = os.path.join(companion_dir, f"right_{i}.png")
-        encode_png(frame, out_path)
-        print(f"wrote {out_path} ({frame.width}x{frame.height})")
+    if os.path.exists(RESOURCE_V2_SHEET):
+        resource_v2_sheet = decode_png(RESOURCE_V2_SHEET)
+        print(f"resource_v2_sheet: {resource_v2_sheet.width}x{resource_v2_sheet.height}")
+
+        # 重切前先清掉舊的 numbered 幀（同 hero，避免殘留混入）。
+        if os.path.isdir(companion_dir):
+            for _f in os.listdir(companion_dir):
+                if _f.startswith("right_") and _f.endswith(".png"):
+                    os.remove(os.path.join(companion_dir, _f))
+
+        companion_frames = slice_resource_v2_companion_walk(resource_v2_sheet)
+        companion_frames = pad_to_common_size(companion_frames)
+        for i, frame in enumerate(companion_frames):
+            out_path = os.path.join(companion_dir, f"right_{i}.png")
+            encode_png(frame, out_path)
+            print(f"wrote {out_path} ({frame.width}x{frame.height})")
+    else:
+        print(f"note: {RESOURCE_V2_SHEET} not found, skipping companion slicing")
 
     # --- 道具／互動物件（Phase 4b）---
     # 同步寫 `props/`（既有路徑，地標 signpost 等非地域限定用途）+ `regions/meadow/props/`
@@ -935,7 +1117,21 @@ def main() -> None:
     if os.path.exists(KINGDOM_SHEET):
         kingdom_sheet = decode_png(KINGDOM_SHEET)
         print(f"kingdom_sheet: {kingdom_sheet.width}x{kingdom_sheet.height}")
+    else:
+        kingdom_sheet = None
 
+    if kingdom_sheet is not None and kingdom_sheet.width != 1774:
+        # 美術大改版（`21_ASSET_OVERHAUL_PLAN.md`）已把 design/kingdom.png 換成新的
+        # 1536x1024 標準尺寸版本（`20_ASSET_SHEET_SPEC.md` 規格），但 `KINGDOM_BG_*`/
+        # `KINGDOM_PROP_REGIONS` 座標表是照舊版 1774x887 版面校準的，兩者不相容
+        # （硬套會裁出錯位/越界的圖，`fade_top_edge` 甚至會因裁切出 ragged row 而 crash）。
+        # 王國地域重切是**美術大改版第 2 波**的範圍（`21` §4「其餘地域切圖」），本波
+        # （第 1 波：主角/旅伴/grassland）刻意不動王國——這裡優雅跳過並印出提示，
+        # 保留 `Resources/art/regions/kingdom/` 現有輸出檔（若有）不被覆蓋成錯誤內容。
+        print(f"note: {KINGDOM_SHEET} is now {kingdom_sheet.width}x{kingdom_sheet.height} (新標準尺寸)，"
+              "舊 KINGDOM_BG_*/KINGDOM_PROP_REGIONS 座標表尚未依此重新校準"
+              "（王國重切屬美術大改版第 2 波範圍），本次跳過王國 bg/props 切圖")
+    elif kingdom_sheet is not None:
         kingdom_bg_dir = os.path.join(OUT_ROOT, "regions", "kingdom", "bg")
         kingdom_layers = (
             ("far", KINGDOM_BG_FAR, None, "far"),
@@ -1010,6 +1206,48 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {SEA_CITY_SHEET} not found, skipping sea_city region slicing")
+
+    # --- 草原地域（美術大改版第 1 波，`21_ASSET_OVERHAUL_PLAN.md` §4）：取代 meadow，
+    # 獨立素材表 design/grassland.png（浮空島+風車村+石屋市集，四層+11 個道具）。
+    # `RegionType.meadowOrigin.assetFolder` 已改指到 `"grassland"`（`Region.swift`），
+    # 這裡把切好的背景/道具寫到 `regions/grassland/`，取代原本讀 `regions/meadow/` 的內容。---
+    if os.path.exists(GRASSLAND_SHEET):
+        grassland_sheet = decode_png(GRASSLAND_SHEET)
+        print(f"grassland_sheet: {grassland_sheet.width}x{grassland_sheet.height}")
+
+        grassland_bg_dir = os.path.join(OUT_ROOT, "regions", "grassland", "bg")
+        grassland_layers = (
+            ("far", GRASSLAND_BG_FAR, None, "far"),
+            ("mid", GRASSLAND_BG_MID, GRASSLAND_BG_MID_TOP_FADE_PX, "mid"),
+            ("fore", GRASSLAND_BG_FORE, GRASSLAND_BG_FORE_TOP_FADE_PX, "fore"),
+            ("ground", GRASSLAND_BG_GROUND, None, "ground"),
+        )
+        for name, region, fade_px, label_key in grassland_layers:
+            img = grassland_sheet.crop(region.x, region.y, region.w, region.h)
+            if label_key is not None and label_key in GRASSLAND_LABEL_BOX_RECTS:
+                # 草原素材表四層（含地面平台）左上角都疊了標籤黑底方框，皆需 patch
+                # （與 kingdom/sea_city 只有 far/mid/fore 有方框、地面平台無方框不同）。
+                # 地面平台層本身是紋理密集的草地/泥土路徑（非天空/牆面那種垂直平緩漸層），
+                # 用水平版 `patch_label_box_horizontal`（抓方框右側同一列，沿水平紋理貼過來）
+                # 比垂直重複自然，見其 docstring。
+                if label_key == "ground":
+                    img = patch_label_box_horizontal(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
+                else:
+                    img = patch_label_box(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
+            if fade_px:
+                img = fade_top_edge(img, fade_px=fade_px)
+            out_path = os.path.join(grassland_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        grassland_props = slice_grassland_props(grassland_sheet)
+        grassland_props_dir = os.path.join(OUT_ROOT, "regions", "grassland", "props")
+        for name, img in grassland_props.items():
+            out_path = os.path.join(grassland_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {GRASSLAND_SHEET} not found, skipping grassland region slicing")
 
 
 def inspect(sheet: Image) -> None:

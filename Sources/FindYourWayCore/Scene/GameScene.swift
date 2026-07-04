@@ -198,10 +198,13 @@ public final class GameScene: SKScene {
     /// 強制指定地域，方便 Fable 截圖三地域畫面不必真的走 8h（`18_STAGE_B_SPEC.md` §4 /
     /// `19_STAGE_C_SPEC.md` §4）。只影響「一開始顯示哪個地域」；不指定時照常依
     /// `displayedDistance` 算，之後仍會隨里程正常交替/Blend（本旗標不凍結地域）。
+    /// 美術大改版第 1 波（`21_ASSET_OVERHAUL_PLAN.md` §4）：`meadowOrigin` 的美術資源夾
+    /// 已改成 `"grassland"`（見 `RegionType.assetFolder`），故也接受 `"grassland"` 別名，
+    /// 方便 Fable 截圖時直接用新名稱；`"meadow"` 仍保留（`RegionType` case 名稱本身沒變）。
     private static func debugRegionOverride() -> RegionType? {
         guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_REGION"] else { return nil }
         switch raw.lowercased() {
-        case "meadow": return .meadowOrigin
+        case "meadow", "grassland": return .meadowOrigin
         case "kingdom": return .kingdom
         case "sea_city", "seacity": return .seaCity
         default: return nil
