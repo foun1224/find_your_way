@@ -42,6 +42,23 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Phase 3 完成（review + 真機驗證 + 提交 963f3f1）
+
+**兩修正完成並驗證**：schemaVersion 戳版本（save 時 currentVersion）+ 章節轉場 toast（chaptersCrossed 純函式，離線=線上迴歸鎖）。106/106 綠。
+**Fable 真機端到端驗證**：寫 v1 舊存檔（無新欄位、schemaVersion:1）+ 時間戳 6h 前 → 啟動 → 存檔變 **schemaVersion:2**（遷移+戳版）、`companionJoined:true`（離線跨 237600 相遇）、`eventsEncountered:[野花坡,溪邊,石上鳥,相遇]`、3 地標、distance 259207。舊資料保留。
+**畫面驗證（Fable 截圖）**：離線回來顯示相遇旅程日誌文案；CompanionNode（卡其小方塊）在主角左後方同行，構圖主從成立。
+**git**：963f3f1（Phase 3）。累計 commit：e9f348e / faf940a / a8bddea / 963f3f1。
+
+**Phase 3 ✅ 完成。專案里程碑：Phase 0–3 全部完成、106 測試綠、真機驗證。**
+
+**下一步（給接手 session）**
+1. 剩餘待人工驗收（GUI 主觀）：相遇 peak 暖金光的「慢而不閃」觀感、同行構圖美感、章節/事件 toast 節奏、閒置 isPaused CPU 下降。
+2. **Phase 4（陪伴質感：正式像素美術 / 晝夜光影 / 天氣 / 點角色微互動 ADR-006）**：需先寫規格（先文字後實作）。美術資源是新變數——需與使用者確認美術路線（自繪像素 / 素材庫 / 委外）。
+3. Phase 5（打包常駐：自啟 SMAppService / 完整選單列 / 簽章 Notarize）。
+4. 里程碑自動 commit（使用者已授權）。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 3 實作交付 + Fable review
 
 **Sonnet 交付 Phase 3**：JourneyEvent(5事件)/Companion(meetDistance 237600)/GrowthStage/GameState 擴充/SimulationEngine.advance 4-tuple/OfflineProgress 事件補算/schema 1→2/CompanionNode/相遇 peak 呈現。`swift test` **97/97 綠**（+34）。
