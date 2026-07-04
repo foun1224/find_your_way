@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-04 — Session 1（續）— Stage B 王國地域 + 動畫 a11y 審視
+
+- **Stage B（0574cb8）**：使用者提供 `design/kingdom.png`（中古王國首都素材）→ 接成第二地域。slice_assets 切王國 bg(far/mid/fore/ground)+props；Region meadow↔kingdom 交替(regionLength 172800)+blend(atDistance) crossfade 純函式；ParallaxBackground.buildRegion+GameScene 地域編排(crossfade 合成不透空)；FYW_DEBUG_REGION。Fable 截圖驗收：王國畫面與草原風格一致、邊界 50/50 crossfade。234 綠。
+- **動畫 a11y（81f79c5）**：使用者分享 Emil Kowalski `review-animations` 技能（裝於 `.agents/`，gitignore）→ 審視所有動畫、守 §3.4 calm 定位。真修：**reduce-motion 覆蓋補全**（呼吸/暖心/看你/相遇/離線捲動在減少動態時去位移保 opacity）+ 2 處 timingMode。判刻意保留者附理由。
+- **待人工驗收**：reduce-motion 開關下角色行為（呼吸停/暖心只剩光暈/離線瞬移）；王國畫面 live。
+- **Stage B+ 後續（可選）**：王國 NPC（士兵/公主當城中行人）、王國/城市風味相遇卡（需 EncounterDeck 加 region 過濾）、石城夜間燈光。
+
+---
+
 ## 2026-07-04 — Session 1（續）— Phase 4 後：心理學迭代 + 無邊世界 + 拖曳
 
 六階段完成後的深化（皆 Fable 截圖/真機驗收、里程碑自動提交）：
