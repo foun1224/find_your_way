@@ -279,13 +279,36 @@ def _is_magenta_hued(rgba, g_max: int = 70, min_rb: int = 70, max_rb_diff: int =
     return g <= g_max and min(r, b) >= min_rb and abs(r - b) <= max_rb_diff
 
 
+def _is_magenta_hued_relative(rgba, min_rb: int = 70, g_ratio: float = 0.75, max_rb_ratio: float = 0.35) -> bool:
+    """`_is_magenta_hued` 的比例版：harbor mid/fore 校準時發現，抗鋸齒邊緣的洋紅像素常常
+    在「往真正物件顏色過渡」的半途被同時拉亮 G、拉開 R/B 差距（例如 `(247,105,178)`——
+    G 已經到 105、R 與 B 差到 69，雙雙超出 `_is_magenta_hued` 的絕對門檻 `g_max=70`／
+    `max_rb_diff=60`，因而漏網、殘留成畫面上可見的洋紅/紫色雜邊）。改用「相對於自身
+    亮度」的比例門檻取代絕對值：只要 G 明顯低於 R/B 中較小值的 `g_ratio`（預設 75%），
+    且 R/B 差距沒有超過「較大值的 `max_rb_ratio`（35%）」（跟至少 40 取大，避免暗部
+    誤傷），就算洋紅系——這樣不論這個像素被抗鋸齒拉到多亮/多暗，只要「G 相對凹陷、
+    R≈B」這個洋紅色相特徵還在，都能抓到。與 `_is_magenta_hued` 一樣不誤傷道具實際
+    暖色（木頭/石材/花色）：這些顏色的最小通道幾乎都是 G 或 B 更低而非「R、B 同時偏高、
+    只有 G 凹陷」的洋紅特徵組合（見 harbor 素材表道具調色盤逐色核對，未發現誤傷案例）。
+    """
+    r, g, b, _ = rgba
+    lo = min(r, b)
+    hi = max(r, b)
+    if lo < min_rb:
+        return False
+    if abs(r - b) > max(40, hi * max_rb_ratio):
+        return False
+    return g < lo * g_ratio
+
+
 def remove_magenta_spill(img: Image) -> Image:
     """`chroma_key_flood_color` 只能挖掉「從畫布邊界 flood-fill 連通」的洋紅像素；道具本體內部
     被完全包圍、連不到邊界的洋紅色殘留（例如長椅座板/靠背縫隙、噴泉底座陰影，`20` §8A 新流程
     校準時發現）無法靠 flood-fill 處理到。這裡不管連通性，直接對每個不透明像素做色相判斷
-    （`_is_magenta_hued`），命中就轉透明——因為這些縫隙原本就代表「這裡應該透出後方」，
-    轉透明才是正確效果（而非誤傷道具本體，道具的木頭/金屬色調不會被誤判，見
-    `_is_magenta_hued` 說明）。
+    （`_is_magenta_hued` **或** `_is_magenta_hued_relative`，後者專門補前者對「抗鋸齒半洋紅
+    邊緣」的漏網——見其說明），命中就轉透明——因為這些縫隙/雜邊原本就代表「這裡應該透出
+    後方」，轉透明才是正確效果（而非誤傷道具本體，道具的木頭/金屬色調不會被誤判，見兩個
+    判準函式的說明）。
     """
     w, h = img.width, img.height
     out = Image(w, h, [row[:] for row in img.pixels])
@@ -294,8 +317,60 @@ def remove_magenta_spill(img: Image) -> Image:
             r, g, b, a = out.pixels[y][x]
             if a == 0:
                 continue
-            if _is_magenta_hued((r, g, b, a)):
+            pixel = (r, g, b, a)
+            if _is_magenta_hued(pixel) or _is_magenta_hued_relative(pixel):
                 out.pixels[y][x] = (r, g, b, 0)
+    return out
+
+
+def strip_magenta_bleed_rows(img: Image, g_margin: int = 15, min_brightness: int = 150, max_rows: int = 8) -> Image:
+    """`design/harbor_test.png` 每一帶（far/mid/fore/...）交界處都疊了細細的分隔線，這條線
+    本身在洋紅底上做抗鋸齒時，會整條「洋紅→白」漸層（例如 mid 帶最底兩列量到
+    `(255,207,255)`／`(255,234,255)`：R、B 已經頂到 255、幾乎看不出彩度，但 G 仍比 R/B
+    低 20～50，肉眼是一條明顯的粉紅/洋紅線）。這種像素亮度太高、太接近白色，
+    `_is_magenta_hued`／`_is_magenta_hued_relative`（比例門檻 `g_ratio=0.75`）都抓不到
+    （`234 < 255*0.75=191.25` 為假）——但整條線橫跨全寬、逐像素平均後洋紅色相訊號非常
+    穩定，因此改用「整列平均」判斷：只掃描 mid/fore 裁切後最上/下緣最多 `max_rows` 列，
+    只要某列不透明像素的平均 G 比平均 min(R,B) 低超過 `g_margin`（且亮度夠高，排除誤判
+    暗部），就整列清成透明；一旦某列不成立就停止往內掃，保證只清掉貼著裁切邊界的
+    分隔線殘影，不會誤傷帶子內部的真實內容（chroma_key_flood_color 之後這幾列本來就
+    只剩下分隔線，沒有道具/建築內容，全部清透明不會造成畫面缺口）。
+    """
+    w, h = img.width, img.height
+    out = Image(w, h, [row[:] for row in img.pixels])
+
+    def row_is_bleed(y: int) -> bool:
+        total = 0
+        sum_g = 0
+        sum_minrb = 0
+        for x in range(w):
+            r, g, b, a = out.pixels[y][x]
+            if a == 0:
+                continue
+            total += 1
+            sum_g += g
+            sum_minrb += min(r, b)
+        if total == 0:
+            return False
+        avg_g = sum_g / total
+        avg_minrb = sum_minrb / total
+        return avg_minrb >= min_brightness and (avg_minrb - avg_g) >= g_margin
+
+    def clear_row(y: int) -> None:
+        for x in range(w):
+            r, g, b, _ = out.pixels[y][x]
+            out.pixels[y][x] = (r, g, b, 0)
+
+    for y in range(0, min(max_rows, h)):
+        if row_is_bleed(y):
+            clear_row(y)
+        else:
+            break
+    for y in range(h - 1, max(-1, h - 1 - max_rows), -1):
+        if row_is_bleed(y):
+            clear_row(y)
+        else:
+            break
     return out
 
 
@@ -1287,18 +1362,20 @@ _HARBOR_DILATED_PROPS = {"signpost", "anchor_sign", "banner", "lamp", "flower_ur
 
 def slice_harbor_bg(sheet: Image) -> dict:
     """海港五帶背景切圖（`20` §8A 新流程驗證）：far 完整含天空、不去背，當獨立 backdrop；
-    mid/fore 洋紅底去背成透明，疊在 far 之前形成真多層視差；ground 不去背，只補頂緣
-    洋紅缺口（`patch_magenta_columns`，見其 docstring 動機）。回傳 `{layer_name: Image}`。
+    mid/fore 洋紅底去背成透明（`chroma_key_flood_color` + `remove_magenta_spill` 清封閉殘留 +
+    `strip_magenta_bleed_rows` 清掉裁切邊界貼著的分隔線洋紅殘影，見三者 docstring），疊在
+    far 之前形成真多層視差；ground 不去背，只補頂緣洋紅缺口（`patch_magenta_columns`，見其
+    docstring 動機）。回傳 `{layer_name: Image}`。
     """
     far = patch_label_box(sheet.crop(HARBOR_BG_FAR.x, HARBOR_BG_FAR.y, HARBOR_BG_FAR.w, HARBOR_BG_FAR.h), HARBOR_LABEL_RECT)
 
     mid_raw = sheet.crop(HARBOR_BG_MID.x, HARBOR_BG_MID.y, HARBOR_BG_MID.w, HARBOR_BG_MID.h)
     mid_raw = patch_label_box(mid_raw, HARBOR_LABEL_RECT)
-    mid = remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))
+    mid = strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60)))
 
     fore_raw = sheet.crop(HARBOR_BG_FORE.x, HARBOR_BG_FORE.y, HARBOR_BG_FORE.w, HARBOR_BG_FORE.h)
     fore_raw = patch_label_box(fore_raw, HARBOR_LABEL_RECT)
-    fore = remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))
+    fore = strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60)))
 
     ground_raw = sheet.crop(HARBOR_BG_GROUND.x, HARBOR_BG_GROUND.y, HARBOR_BG_GROUND.w, HARBOR_BG_GROUND.h)
     ground = patch_magenta_columns(ground_raw)

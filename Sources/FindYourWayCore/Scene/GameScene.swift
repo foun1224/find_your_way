@@ -740,7 +740,11 @@ public final class GameScene: SKScene {
                 layerFactor: layer.layerFactor
             )
             for (node, x) in zip(layer.nodes, xs) {
-                node.position.x = CGFloat(x)
+                // `node.xScale` 在建立時就依槽位奇偶固定為鏡像平鋪的翻轉狀態（見
+                // `ParallaxBackground.buildLayer`），這裡沿用同一套換算，讓翻轉 tile 每幀
+                // 捲動時都補上同樣的 anchor 偏移，維持接縫無縫、不位移。
+                let flipped = node.xScale < 0
+                node.position.x = CGFloat(ParallaxBackground.mirroredScreenX(x, tileWidth: layer.tileWidth, flipped: flipped))
             }
         }
 

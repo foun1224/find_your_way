@@ -195,17 +195,33 @@ public enum ParallaxBackground {
         )
 
         var nodes: [SKSpriteNode] = []
-        for x in initialXs {
+        for (index, x) in initialXs.enumerated() {
             let node = SKSpriteNode(texture: texture)
             node.size = CGSize(width: width, height: height)
             node.texture?.filteringMode = .nearest
             node.anchorPoint = CGPoint(x: 0, y: 0)
-            node.position = CGPoint(x: CGFloat(x), y: CGFloat(bottomY))
+            // 鏡像平鋪（見型別註解「無縫水平平鋪」）：奇數槽位水平翻轉（`xScale = -1`），
+            // 讓每個相鄰 tile 交界處的邊緣欄永遠是同一批像素的鏡像，消除接縫（ABAB 手法）。
+            // `mirroredScreenX` 同步把 anchor 從左緣換算成翻轉後的正確 x（見其說明）。
+            let flipped = index % 2 == 1
+            node.xScale = flipped ? -1 : 1
+            node.position = CGPoint(x: CGFloat(mirroredScreenX(x, tileWidth: width, flipped: flipped)), y: CGFloat(bottomY))
             node.zPosition = zPosition
             parent.addChild(node)
             nodes.append(node)
         }
         return SceneryLayer(nodes: nodes, layerFactor: layerFactor, tileWidth: width)
+    }
+
+    /// 鏡像平鋪的 x 座標換算（`buildLayer`/`GameScene.applyScroll` 共用）：`WorldScroll.panoramaTileXs`
+    /// 算出的 `x` 一律是「tile 左緣」座標，假設 `anchorPoint = (0, 0)` 且未翻轉（`xScale = 1`）時
+    /// tile 佔據 `[x, x + tileWidth]`。翻轉（`xScale = -1`）時 SpriteKit 會把節點的本地座標系
+    /// 繞 anchor（也就是 `position`）水平鏡射，使 tile 改佔據 `[position.x - tileWidth, position.x]`——
+    /// 若仍把 `position.x` 設成 `x`，翻轉後的 tile 會整張左移一個 tile 寬，跟未翻轉時的位置對不齊、
+    /// 露出縫隙/重疊。這裡把翻轉 tile 的 `position.x` 補上 `+ tileWidth`，讓翻轉後仍佔據跟未翻轉
+    /// 時相同的 `[x, x + tileWidth]` 範圍，捲動位置完全不變、只有內容水平鏡射。
+    static func mirroredScreenX(_ x: Double, tileWidth: Double, flipped: Bool) -> Double {
+        flipped ? x + tileWidth : x
     }
 
     // MARK: - 找不到美術時的優雅降級（Phase 2 純色滿版）
