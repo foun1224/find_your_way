@@ -114,6 +114,16 @@ MEADOW_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "village_layered.png")
 # 出入，各自獨立校準，不共用同一組座標）。
 KINGDOM_CITY_SHEET = os.path.join(REPO_ROOT, "design", "city_layered_1.png")
 TREE_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "village3_layered.png")
+# 接手任務（2026-07-05）：把休眠中的 `RegionType.skyCity`（舊單 backdrop `sky_city`，因
+# 舊格式浮空違和感被踢出循環）重新指到新的 layered 格式美術，重新排回循環尾端（壓軸，
+# `kingdom`/`village3` 重排回循環的同一手法，管線原樣複製）：`design/sky_layered.png`
+# （白金浮空天空之城：漂浮宮殿島/瀑布/飛船/牌樓拱門/停泊飛船碼頭/水晶）→
+# `RegionType.skyCity` 新資源夾 `"sky_city_v2"`。1536x1024，版式與 meadow_village/
+# kingdom_city 完全相同——遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、
+# 地面平台不去背只補頂緣洋紅缺口。座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad
+# 校準紀錄（此圖的 Mid/Fore/Ground 邊界與 kingdom_city/village3 略有出入，獨立校準，
+# 不共用同一組座標）。
+SKY_CITY_V2_SHEET = os.path.join(REPO_ROOT, "design", "sky_layered.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -2642,6 +2652,102 @@ def slice_kingdom_city_props(sheet: Image) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 白金浮空天空之城（`design/sky_layered.png`，1536x1024）的分區座標校準：
+#   Far：  y=0..281（h=282）
+#   Mid：  y=282..499（h=218）
+#   Fore： y=500..732（h=233）
+#   Ground：y=792..851（h=60，12px inset，起點跳過「地面平台」標籤方框+留白，磚紋內容
+#           真正開始處）
+#   Props：y=854..1023（h=170）
+# Fore 刻意在「地面平台」標籤方框（y=733..790 一帶）開始前收尾，不裁進 Fore（避免
+# meadow_village 曾踩過的 navy-artifact bug：Fore 只去背不補標籤方框，方框留在 Fore 裡
+# 會變實心色塊），Ground 起點也跳過方框本身。去背手法完全沿用 kingdom_city/meadow_village
+# 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+SKY_CITY_V2_BG_FAR = Region(x=0, y=0, w=1536, h=282)
+SKY_CITY_V2_BG_MID = Region(x=0, y=282, w=1536, h=218)
+SKY_CITY_V2_BG_FORE = Region(x=0, y=500, w=1536, h=233)
+SKY_CITY_V2_BG_GROUND = Region(x=12, y=792, w=1512, h=60)
+SKY_CITY_V2_PROPS_REGION = Region(x=0, y=854, w=1536, h=170)
+
+SKY_CITY_V2_LABEL_RECT = Region(x=0, y=0, w=120, h=50)
+SKY_CITY_V2_PROPS_LABEL_RECT = Region(x=0, y=0, w=140, h=48)
+
+# 道具列 13 個道具座標（逐欄「非洋紅像素密度」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：路燈／旗幟／指路牌／水晶（底座）／花卉甕／水晶柱／寶箱／
+# 木桶／木箱／花圃木箱／長椅／噴泉／告示牌（涼亭式佈告欄）。範圍刻意留餘裕，去背 +
+# autocrop 後收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+SKY_CITY_V2_PROP_REGIONS: dict = {
+    "lamp_post": Region(x=40, y=0, w=98, h=170),
+    "banner": Region(x=138, y=0, w=90, h=170),
+    "signpost": Region(x=228, y=0, w=90, h=170),
+    "crystal": Region(x=318, y=0, w=104, h=170),
+    "flower_urn": Region(x=422, y=0, w=122, h=170),
+    "crystal_pillar": Region(x=544, y=0, w=94, h=170),
+    "chest": Region(x=638, y=0, w=118, h=170),
+    "barrel": Region(x=756, y=0, w=92, h=170),
+    "crate": Region(x=848, y=0, w=112, h=170),
+    "flower_box": Region(x=960, y=0, w=122, h=170),
+    "bench": Region(x=1082, y=0, w=118, h=170),
+    "fountain": Region(x=1200, y=0, w=144, h=170),
+    "notice_board": Region(x=1344, y=0, w=186, h=170),
+}
+# 細桿件/薄邊框（路燈燈柱+燈臂、旗幟細桿、指路牌柱、水晶柱細尖）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件。
+_SKY_CITY_V2_DILATED_PROPS = {"lamp_post", "banner", "signpost", "crystal_pillar"}
+
+
+def slice_sky_city_v2_bg(sheet: Image) -> dict:
+    """白金浮空天空之城背景切圖：手法與 `slice_kingdom_city_bg`/`slice_meadow_village_bg`
+    完全一致（far 不去背當 backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景
+    物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box_sky(
+        sheet.crop(SKY_CITY_V2_BG_FAR.x, SKY_CITY_V2_BG_FAR.y, SKY_CITY_V2_BG_FAR.w, SKY_CITY_V2_BG_FAR.h),
+        SKY_CITY_V2_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(SKY_CITY_V2_BG_MID.x, SKY_CITY_V2_BG_MID.y, SKY_CITY_V2_BG_MID.w, SKY_CITY_V2_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, SKY_CITY_V2_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(SKY_CITY_V2_BG_FORE.x, SKY_CITY_V2_BG_FORE.y, SKY_CITY_V2_BG_FORE.w, SKY_CITY_V2_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, SKY_CITY_V2_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見上方校準說明）已經避開「地面平台」標籤方框所在的 y 範圍，不需要
+    # （也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(SKY_CITY_V2_BG_GROUND.x, SKY_CITY_V2_BG_GROUND.y, SKY_CITY_V2_BG_GROUND.w, SKY_CITY_V2_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_sky_city_v2_props(sheet: Image) -> dict:
+    """白金浮空天空之城道具列切圖：手法與 `slice_kingdom_city_props`/`slice_meadow_village_props`
+    完全一致（先蓋掉整條道具列的標籤方框，再逐一裁切去背 + 依 `_SKY_CITY_V2_DILATED_PROPS`
+    選細桿件保護）。
+    """
+    region = SKY_CITY_V2_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, SKY_CITY_V2_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in SKY_CITY_V2_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _SKY_CITY_V2_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
 TREE_VILLAGE_BG_FAR = Region(x=0, y=0, w=1536, h=274)
 TREE_VILLAGE_BG_MID = Region(x=0, y=274, w=1536, h=228)
 TREE_VILLAGE_BG_FORE = Region(x=0, y=502, w=1536, h=246)
@@ -3380,6 +3486,27 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {TREE_VILLAGE_SHEET} not found, skipping tree_village region slicing")
+
+    # --- 白金浮空天空之城（接手任務：`RegionType.skyCity` 重新指回 layered 美術，
+    # `design/sky_layered.png`，`FYW_DEBUG_REGION=sky_city_v2` 可直接截圖驗收）：
+    # 重新排回循環尾端，作為壓軸地域。---
+    if os.path.exists(SKY_CITY_V2_SHEET):
+        sky_city_v2_sheet = decode_png(SKY_CITY_V2_SHEET)
+        print(f"sky_city_v2_sheet: {sky_city_v2_sheet.width}x{sky_city_v2_sheet.height}")
+
+        sky_city_v2_bg_dir = os.path.join(OUT_ROOT, "regions", "sky_city_v2", "bg")
+        for name, img in slice_sky_city_v2_bg(sky_city_v2_sheet).items():
+            out_path = os.path.join(sky_city_v2_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        sky_city_v2_props_dir = os.path.join(OUT_ROOT, "regions", "sky_city_v2", "props")
+        for name, img in slice_sky_city_v2_props(sky_city_v2_sheet).items():
+            out_path = os.path.join(sky_city_v2_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {SKY_CITY_V2_SHEET} not found, skipping sky_city_v2 region slicing")
 
 
 def inspect(sheet: Image) -> None:

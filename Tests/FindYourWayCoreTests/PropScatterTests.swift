@@ -101,6 +101,27 @@ final class PropScatterTests: XCTestCase {
         XCTAssertFalse(PropScatter.slots(for: .kingdom).isEmpty, "王國首都已重新排進 11 地域循環，不該再是空槽位表")
     }
 
+    // MARK: - 白金浮空天空之城地域道具池（再接手任務：skyCity 重新指回 layered 美術，壓軸地域）
+
+    func testSkyCityV2SlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.skyCityV2Slots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "白金浮空天空之城槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.skyCityV2Slots.isEmpty, "白金浮空天空之城槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.skyCityV2Slots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksSkyCityV2Pool() {
+        XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCityV2Slots)
+        XCTAssertFalse(PropScatter.slots(for: .skyCity).isEmpty, "白金浮空天空之城已重新排進 12 地域循環（壓軸地域），不該再是空槽位表")
+    }
+
     // MARK: - 森林樹屋村落地域道具池（再接手任務：village3 重新指回 layered 美術）
 
     func testTreeVillageSlotsAreWithinSpanAndSortedAndNonEmpty() {
@@ -353,6 +374,9 @@ final class PropScatterTests: XCTestCase {
         // （不再是舊 `village3Slots`，見 `testSlotsForRegionPicksTreeVillagePool`）；`village3Slots`
         // 本身仍保留（休眠，對應舊 `"village_3"` 單張背景，供未來重啟參考）。
         XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageSlots)
-        XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCitySlots)
+        // skyCity 再接手任務（2026-07-05）重新指回 layered 美術，道具池換成 `skyCityV2Slots`
+        // （不再是舊 `skyCitySlots`，見 `testSlotsForRegionPicksSkyCityV2Pool`）；`skyCitySlots`
+        // 本身仍保留（休眠，對應舊 `"sky_city"` 單張背景，供未來重啟參考）。
+        XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCityV2Slots)
     }
 }

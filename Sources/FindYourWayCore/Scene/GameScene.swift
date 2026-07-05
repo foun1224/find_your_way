@@ -271,7 +271,9 @@ public final class GameScene: SKScene {
         // 資源夾名稱皆接受，方便截圖驗收。
         case "village_3", "village3", "tree_village", "treevillage": return .village3
         case "sky_village", "skyvillage": return .skyVillage
-        case "sky_city", "skycity", "sky_city_magic": return .skyCity
+        // 白金浮空天空之城（接手任務：`skyCity` 重新指回 layered 美術 `"sky_city_v2"`，
+        // 壓軸地域）：新舊資源夾名稱皆接受，方便截圖驗收。
+        case "sky_city", "skycity", "sky_city_magic", "sky_city_v2", "skycityv2": return .skyCity
         // 海港（`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」美術流程驗證地域，
         // `RegionType.harbor`，已驗證通過並排進循環，取代 seaCity）。
         case "harbor": return .harbor
