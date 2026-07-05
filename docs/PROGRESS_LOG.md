@@ -22,9 +22,14 @@
 
 **體檢＋淘汰（使用者走一輪 montage 後）**：15 地域逐張全解析度雙鏡複檢 → 淘汰 **village_2**（天空太空/中前景稀疏）、**valley**（灰褪色/低對比）兩張舊格式弱圖。移除 enum/cycle/assetFolder/debugOverride/scatter slots/測試（保留 design png 與素材夾、slice_assets.py 留置）。其餘 5 舊格式（grassland/kingdom/village3/skyVillage/skyCity）品質站得住續留。**→ 13 地域循環**：`meadowOrigin→kingdom→village3→hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→skyVillage→mountainPalace→magicCity→holyCity→skyCity`。
 
+**標籤補丁痕根治**：新增 `patch_label_box_sky`（方框四邊反距離加權內插填洞，天空漸層平滑重建）取代單列重複，只套 far 層（8 layered + kingdom/grassland/new_region 泛用切法的 far 分支），mid/fore 不動（去背後透明不可見 + 避免內插污染洋紅去背）。天空區標籤方塊隱形、village_3 森林區塊痕融成樹冠。
+
+**主角升級**：`design/main_role_walk_v2.png`（8 走路 + 4 待機）取代舊 3 姿勢/舊 walk。`slice_main_role_walk_v2` 深藍底去背 + **一致腳基準**（全幀最低不透明列取最小值當共用著地線、8 幀同高 bottomPad=0、只 autocrop 左右上 → 腳貼地零抖動）+ 去陰影。走路覆蓋 char_hero/right_0..7（drop-in 無 Swift 改）；待機 char_hero/idle_0..3（CharacterNode idle 接線待後續）。
+
+**「浮起來」根因 + 舊格式地域移除**：使用者實走發現角色浮空。根因＝舊格式單-backdrop 地域（meadowOrigin/kingdom/village3/skyVillage/skyCity）只渲染 far 一層、far 自畫前景地平線落在薄 40px 地面條上方（layered 有 mid/fore 蓋住就沒事）。使用者決定「舊的先移除、用新的」→ cycle 移除該 5 個、**enum case 保留**（休眠模式，meadowOrigin 仍當 fallback 預設，槽位/override 原樣留），待重生 layered 版加回。**→ 8 地域全 layered 循環**：`hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→mountainPalace→magicCity→holyCity`。實機 harbor 驗收角色穩踩碼頭無浮空。
+
 - 測試 **328/328 綠**。
-**已知系統性小瑕（全域，待修）**：遠景天空上緣 `patch_label_box` 標籤補丁痕（重複單列 → 淡直紋/方塊，village_3 左上最明顯）。根治方向：改補丁法用鄰近天空漸層填而非重複單列，一次全地域受益。
-**待使用者**：13 地域 GUI 實走體感；future_city 喚醒度最高，若實際打擾可加 always-night/降 bloom/降飽和專屬處理（已留備註）；mountain_palace 仙俠味若覺出戲可拉掉；village3/kingdom 順序若想 village3 在前可重排。
+**待使用者**：① 重生 5 個舊地域為 layered 格式（磁紅 mid/fore + far 壓低地平線）加回 cycle；② 8 地域 GUI 實走體感；③ CharacterNode idle 接線（4 待機幀已切好待用）；④ future_city 喚醒度最高、mountain_palace 仙俠味去留（已留備註）。
 
 ---
 
