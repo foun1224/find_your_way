@@ -72,8 +72,31 @@ final class PropScatterTests: XCTestCase {
     }
 
     func testSlotsForRegionPicksMeadowOrKingdomPool() {
-        XCTAssertEqual(PropScatter.slots(for: .meadowOrigin), PropScatter.slots)
+        // meadowOrigin 接手任務（2026-07-05）重新指回 layered 美術，道具池換成
+        // `meadowVillageSlots`（不再是舊 `slots`/grassland 道具池，見 `testMeadowVillageSlotsAreWithinSpanAndSortedAndNonEmpty`）。
+        XCTAssertEqual(PropScatter.slots(for: .meadowOrigin), PropScatter.meadowVillageSlots)
         XCTAssertEqual(PropScatter.slots(for: .kingdom), PropScatter.kingdomSlots)
+    }
+
+    // MARK: - 中世紀奇幻村莊地域道具池（接手任務：meadowOrigin 重新指回 layered 美術，開場地域）
+
+    func testMeadowVillageSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.meadowVillageSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "中世紀奇幻村莊槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.meadowVillageSlots.isEmpty, "中世紀奇幻村莊槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.meadowVillageSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksMeadowVillagePool() {
+        XCTAssertEqual(PropScatter.slots(for: .meadowOrigin), PropScatter.meadowVillageSlots)
+        XCTAssertFalse(PropScatter.slots(for: .meadowOrigin).isEmpty, "中世紀奇幻村莊已重新排進 9 地域循環（開場地域），不該再是空槽位表")
     }
 
     // MARK: - 港口海城道具池（`19_STAGE_C_SPEC.md` §1/§3，第三地域）

@@ -96,6 +96,12 @@ STEAMPUNK_CITY_SHEET = os.path.join(REPO_ROOT, "design", "steampunk_city.png")
 # 建築內部被深色像素包住的霓虹色塊），但仍需逐張目視確認霓虹燈牌沒有被誤挖洞、也沒有
 # 洋紅殘留邊緣。
 FUTURE_CITY_SHEET = os.path.join(REPO_ROOT, "design", "future_city.png")
+# `design/village_layered.png`（歐式中世紀奇幻村莊，農舍/教堂/風車/石拱橋/瀑布/遠山城堡，
+# 版式與 holy_city 完全相同——遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、
+# 地面平台不去背只補頂緣洋紅缺口），1536x1024。座標由 Read + 逐像素洋紅比例掃描校準，
+# 見 scratchpad 校準紀錄。取代 meadowOrigin 舊版單張背景（`grassland`），讓開場地域也是
+# layered 格式，角色不再有浮空違和感。
+MEADOW_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "village_layered.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -2414,6 +2420,111 @@ def slice_future_city_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 中世紀奇幻村莊（接手任務：meadowOrigin 重新指回 layered 美術，`design/village_layered.png`，
+# 1536x1024，版式與 holy_city 完全相同——遠景含天空不去背、中景/前景/道具皆洋紅
+# `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。五帶 y 範圍：
+#   Far（藍天白雲+遠山剪影，不去背）：                      y=0..273   （h=274，
+#                                          比 holy_city 少 1px——y=274 那一行已經
+#                                          帶有部分洋紅殘留，往上收 1px 避免 far
+#                                          backdrop 留下洋紅雜點）
+#   Mid（洋紅底農舍/教堂聚落，去背）：                       y=274..494 （h=221）
+#   Fore（洋紅底風車/石拱橋/瀑布/前景農舍，去背）：           y=495..747 （h=253；
+#                                          實際內容在 y≈722 前已收尾，747 之後到
+#                                          787 是「地面平台」標籤方框
+#                                          （y≈749..778）+ 洋紅留白，不可併入 Fore，
+#                                          否則深色標籤方框不會被洋紅去背去除，會變成
+#                                          浮在 Fore 圖層上的黑色色塊瑕疵）
+#   Ground（石磚步道，不去背，只補頂緣洋紅缺口）：            y=788..851 （h=64，
+#                                          x=12..1523，左右各裁掉 12px，同
+#                                          holy_city 12px inset 校準；788 是磚紋
+#                                          實際內容開始處，此前是「地面平台」標籤
+#                                          方框與洋紅留白）
+#   Props（洋紅底道具列，去背）：                           y=852..1023（h=172）
+# 去背手法完全沿用 holy_city 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+MEADOW_VILLAGE_BG_FAR = Region(x=0, y=0, w=1536, h=274)
+MEADOW_VILLAGE_BG_MID = Region(x=0, y=274, w=1536, h=221)
+MEADOW_VILLAGE_BG_FORE = Region(x=0, y=495, w=1536, h=253)
+MEADOW_VILLAGE_BG_GROUND = Region(x=12, y=788, w=1512, h=64)
+MEADOW_VILLAGE_PROPS_REGION = Region(x=0, y=852, w=1536, h=172)
+
+MEADOW_VILLAGE_LABEL_RECT = Region(x=0, y=0, w=120, h=50)
+MEADOW_VILLAGE_PROPS_LABEL_RECT = Region(x=0, y=0, w=140, h=48)
+
+# 道具列 11 個道具座標（逐欄「非洋紅像素密度」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：松樹／路燈／指路牌／木柵欄／木桶／木箱／花卉推車／花圃／
+# 曬衣繩／石牆（原推測「石井」，目視後確認是矮石牆＋花草，無水桶/井繩結構，改實名）／
+# 十字聖壇。範圍刻意留餘裕，去背 + autocrop 後收斂到精確 bounding box；相鄰槽位的餘裕
+# 重疊落在洋紅留白，不會誤裁鄰居。
+MEADOW_VILLAGE_PROP_REGIONS: dict = {
+    "pine_tree": Region(x=0, y=0, w=214, h=172),
+    "lamp_post": Region(x=214, y=0, w=81, h=172),
+    "signpost": Region(x=295, y=0, w=92, h=172),
+    "wooden_fence": Region(x=387, y=0, w=146, h=172),
+    "barrel": Region(x=533, y=0, w=89, h=172),
+    "crate": Region(x=622, y=0, w=110, h=172),
+    "flower_cart": Region(x=732, y=0, w=157, h=172),
+    "flower_box": Region(x=889, y=0, w=147, h=172),
+    "laundry_line": Region(x=1036, y=0, w=178, h=172),
+    "stone_wall": Region(x=1214, y=0, w=156, h=172),
+    "cross_shrine": Region(x=1370, y=0, w=166, h=172),
+}
+# 細桿件/薄邊框（路燈燈柱、指路牌柱、曬衣繩桿+繩、十字聖壇頂端細十字）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件。
+_MEADOW_VILLAGE_DILATED_PROPS = {"lamp_post", "signpost", "laundry_line", "cross_shrine"}
+
+
+def slice_meadow_village_bg(sheet: Image) -> dict:
+    """中世紀奇幻村莊背景切圖：手法與 `slice_holy_city_bg` 完全一致（far 不去背當
+    backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，
+    只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box_sky(
+        sheet.crop(MEADOW_VILLAGE_BG_FAR.x, MEADOW_VILLAGE_BG_FAR.y, MEADOW_VILLAGE_BG_FAR.w, MEADOW_VILLAGE_BG_FAR.h),
+        MEADOW_VILLAGE_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(MEADOW_VILLAGE_BG_MID.x, MEADOW_VILLAGE_BG_MID.y, MEADOW_VILLAGE_BG_MID.w, MEADOW_VILLAGE_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, MEADOW_VILLAGE_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(MEADOW_VILLAGE_BG_FORE.x, MEADOW_VILLAGE_BG_FORE.y, MEADOW_VILLAGE_BG_FORE.w, MEADOW_VILLAGE_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, MEADOW_VILLAGE_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `MEADOW_VILLAGE_BG_GROUND` 校準說明）已經避開「地面平台」標籤
+    # 方框所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(MEADOW_VILLAGE_BG_GROUND.x, MEADOW_VILLAGE_BG_GROUND.y, MEADOW_VILLAGE_BG_GROUND.w, MEADOW_VILLAGE_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_meadow_village_props(sheet: Image) -> dict:
+    """中世紀奇幻村莊道具列切圖：手法與 `slice_holy_city_props` 完全一致（先蓋掉整條
+    道具列的標籤方框，再逐一裁切去背 + 依 `_MEADOW_VILLAGE_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = MEADOW_VILLAGE_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, MEADOW_VILLAGE_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in MEADOW_VILLAGE_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _MEADOW_VILLAGE_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -3007,6 +3118,27 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {FUTURE_CITY_SHEET} not found, skipping future_city region slicing")
+
+    # --- 中世紀奇幻村莊（接手任務：holy_city 管線推廣，`design/village_layered.png`）：
+    # 重新指回循環第一個地域（開場）`meadowOrigin`，`FYW_DEBUG_REGION=meadow_village`
+    # 可直接截圖驗收。---
+    if os.path.exists(MEADOW_VILLAGE_SHEET):
+        meadow_village_sheet = decode_png(MEADOW_VILLAGE_SHEET)
+        print(f"meadow_village_sheet: {meadow_village_sheet.width}x{meadow_village_sheet.height}")
+
+        meadow_village_bg_dir = os.path.join(OUT_ROOT, "regions", "meadow_village", "bg")
+        for name, img in slice_meadow_village_bg(meadow_village_sheet).items():
+            out_path = os.path.join(meadow_village_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        meadow_village_props_dir = os.path.join(OUT_ROOT, "regions", "meadow_village", "props")
+        for name, img in slice_meadow_village_props(meadow_village_sheet).items():
+            out_path = os.path.join(meadow_village_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {MEADOW_VILLAGE_SHEET} not found, skipping meadow_village region slicing")
 
 
 def inspect(sheet: Image) -> None:

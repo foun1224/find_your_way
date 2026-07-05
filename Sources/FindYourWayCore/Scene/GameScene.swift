@@ -260,7 +260,9 @@ public final class GameScene: SKScene {
     private static func debugRegionOverride() -> RegionType? {
         guard let raw = ProcessInfo.processInfo.environment["FYW_DEBUG_REGION"] else { return nil }
         switch raw.lowercased() {
-        case "meadow", "grassland": return .meadowOrigin
+        // 中世紀奇幻村莊（接手任務：`meadowOrigin` 重新指回 layered 美術 `"meadow_village"`，
+        // 排回循環最前面當開場地域）：新舊資源夾名稱皆接受，方便截圖驗收。
+        case "meadow", "grassland", "meadow_village", "meadowvillage": return .meadowOrigin
         case "kingdom": return .kingdom
         case "sea_city", "seacity": return .seaCity
         case "village_3", "village3": return .village3

@@ -234,13 +234,28 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "neon_tree"),
     ]
 
+    /// 中世紀奇幻村莊地域槽位表（接手任務：`meadowOrigin` 重新指回 layered 美術，`21` §2/§4，
+    /// holy_city 管線推廣）：道具池換成 `regions/meadow_village/props/` 切出的歐式中世紀
+    /// 奇幻村莊道具（路燈/指路牌/花卉推車/曬衣繩/矮石牆/十字聖壇等），間距手法同
+    /// `holyCitySlots`（確定性、依 `baseX` 遞增排列）。
+    public static let meadowVillageSlots: [Slot] = [
+        Slot(baseX: 40, propName: "lamp_post"),
+        Slot(baseX: 130, propName: "signpost"),
+        Slot(baseX: 220, propName: "flower_cart"),
+        Slot(baseX: 310, propName: "laundry_line"),
+        Slot(baseX: 400, propName: "stone_wall"),
+        Slot(baseX: 490, propName: "cross_shrine"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
         case .kingdom: return kingdomSlots
         case .seaCity: return seaCitySlots
-        case .meadowOrigin, .riverlands, .highlands, .coastalReach: return slots
+        // 中世紀奇幻村莊（接手任務，重新指回 layered 美術，開場地域）：道具池見 `meadowVillageSlots`。
+        case .meadowOrigin: return meadowVillageSlots
+        case .riverlands, .highlands, .coastalReach: return slots
         case .village3: return village3Slots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots

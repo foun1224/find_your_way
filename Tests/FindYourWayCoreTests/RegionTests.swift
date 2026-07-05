@@ -4,22 +4,24 @@ import XCTest
 /// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5 + 美術大改版第 2 波
 /// `21_ASSET_OVERHAUL_PLAN.md` §2（第 3 波以 harbor 取代 seaCity；接手任務新增
 /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
-/// 再新增 steampunkCity、再新增 futureCity；後續接手任務移除 village2/valley）：
-/// 8 地域循環（使用者移除 5 個舊格式浮空地域後，全為 layered 新格式）
-/// （hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→mountainPalace→
-/// magicCity→holyCity→回到 hotspringVillage）、邊界正確、Blend Zone crossfade 純函式
-/// （8 對相鄰邊界都要正確）。
+/// 再新增 steampunkCity、再新增 futureCity；後續接手任務移除 village2/valley；
+/// 再接手任務把 meadowOrigin 重新指回 layered 美術、排回循環最前面當開場地域）：
+/// 9 地域循環（meadowOrigin 補上 layered 美術後重新排回，其餘全為 layered 新格式）
+/// （meadowOrigin→hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→
+/// mountainPalace→magicCity→holyCity→回到 meadowOrigin）、邊界正確、Blend Zone
+/// crossfade 純函式（9 對相鄰邊界都要正確）。
 final class RegionTests: XCTestCase {
 
     /// `21` §2 上線序列（第 3 波取代版 + 接手任務新增 hotspringVillage、mountainPalace、
     /// snowMountain、magicCity、holyCity、steampunkCity、futureCity；後續接手任務移除
-    /// village2/valley），供以下測試逐一走過（比逐一手寫 13 個 case 更不容易漏掉某對邊界）。
+    /// village2/valley；再接手任務把 meadowOrigin 重新排回最前面），供以下測試逐一走過
+    /// （比逐一手寫 13 個 case 更不容易漏掉某對邊界）。
     private static let expectedCycle: [RegionType] = [
-        .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .mountainPalace, .magicCity, .holyCity,
+        .meadowOrigin, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .mountainPalace, .magicCity, .holyCity,
     ]
 
     func testDistanceZeroIsFirstRegion() {
-        XCTAssertEqual(Region.at(distance: 0), .hotspringVillage)
+        XCTAssertEqual(Region.at(distance: 0), .meadowOrigin)
     }
 
     func testSameDistanceAlwaysProducesSameRegion() {
@@ -31,9 +33,9 @@ final class RegionTests: XCTestCase {
     func testCyclesThroughAllEightRegionsInOrder() {
         let length = Region.regionLength
         let cycle = Self.expectedCycle
-        XCTAssertEqual(cycle.count, 8, "8 地域循環（使用者決定移除 5 個舊格式單-backdrop 地域 meadowOrigin/kingdom/village3/skyVillage/skyCity——會讓角色浮空——只留全 layered 新格式，待重生 layered 版再加回），這裡先確認測試本身沒寫錯數量")
+        XCTAssertEqual(cycle.count, 9, "9 地域循環（meadowOrigin 補上 layered 美術後重新排回開場位置，其餘全為 layered 新格式），這裡先確認測試本身沒寫錯數量")
 
-        // 走兩輪（16 個 band），確認每個 band 都落在預期地域、且能無縫接回第一輪。
+        // 走兩輪（18 個 band），確認每個 band 都落在預期地域、且能無縫接回第一輪。
         for round in 0..<2 {
             for (offset, expected) in cycle.enumerated() {
                 let bandIndex = round * cycle.count + offset
@@ -48,8 +50,8 @@ final class RegionTests: XCTestCase {
 
     func testCyclesBackToFirstRegionAfterEightBands() {
         let length = Region.regionLength
-        XCTAssertEqual(Region.at(distance: length * 8), .hotspringVillage)
-        XCTAssertEqual(Region.at(distance: length * 16), .hotspringVillage)
+        XCTAssertEqual(Region.at(distance: length * 9), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 18), .meadowOrigin)
     }
 
     func testBandIndexMatchesFloorDivision() {
@@ -60,8 +62,8 @@ final class RegionTests: XCTestCase {
     }
 
     func testStageBKeepsShortTravelInFirstRegion() {
-        // regionLength 172800（≈4h）：短里程（幾小時內）仍在第一地域（現為 hotspringVillage）。
-        XCTAssertEqual(Region.at(distance: 43_200), .hotspringVillage)
+        // regionLength 172800（≈4h）：短里程（幾小時內）仍在第一地域（現為 meadowOrigin）。
+        XCTAssertEqual(Region.at(distance: 43_200), .meadowOrigin)
     }
 
     // MARK: - Blend Zone（`18` §3 / `19` §2 三對相鄰邊界）
@@ -80,9 +82,9 @@ final class RegionTests: XCTestCase {
         XCTAssertEqual(blend.t, 0)
     }
 
-    /// 8 地域循環的每一對相鄰邊界（含「回到第一個地域」那對）都要 crossfade 正確——
-    /// 逐一手寫 8 份幾乎一樣的測試容易漏掉某一對，改成走過 `expectedCycle` 的資料驅動版本
-    /// （比手寫 8 份更完整、也更不容易漏測）。
+    /// 9 地域循環的每一對相鄰邊界（含「回到第一個地域」那對）都要 crossfade 正確——
+    /// 逐一手寫 9 份幾乎一樣的測試容易漏掉某一對，改成走過 `expectedCycle` 的資料驅動版本
+    /// （比手寫 9 份更完整、也更不容易漏測）。
     func testBlendProgressesFromZeroToOneAcrossEveryAdjacentBoundary() {
         let length = Region.regionLength
         let halfWidth = Region.blendWidth / 2.0
