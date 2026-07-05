@@ -118,6 +118,21 @@ public final class GameScene: SKScene {
     /// 上一次播放「歡迎回來」反應的時間，供 `PresenceSchedule.canTriggerReturnWelcome` 節流。
     private var lastReturnWelcomeTime: Double = -.infinity
 
+    // MARK: - P4 尊重專注的分寸（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P4）：
+    // 只吃 `notifyIdleSeconds` 已在讀的同一份「OS 閒置秒數」，純判斷邏輯在 `FocusState`
+    // （可測、不牆鐘）。專注時純減法收起會拉注意力的行為（toast/偶爾看你），只剩走路+呼吸；
+    // 一旦退出專注，一切照舊恢復——本階不新增任何窺視訊號、不新增任何權限。
+
+    /// 目前的專注判定狀態（`FocusState.advance` 逐次推進）。`isFocused == true` 時
+    /// `performTick`/`presentReturnCatchUp` 跳過相遇卡/關係句/深夜句的顯示、
+    /// `scheduleNextHeroRest`/`performHeroRest` 收起週期性「偶爾看你」。
+    private var focusState = FocusState.State()
+
+    /// 上一次評估 `FocusState` 的真實時刻，供算出兩次 `notifyIdleSeconds` 呼叫之間的 `dt`
+    /// （`FocusState.advance` 本身不牆鐘，由這裡量測時間差餵給它）。`nil` 代表尚未評估過
+    /// （第一次呼叫時不累積任何連續活動時長，避免把「剛啟動」誤算成一大段 dt）。
+    private var lastFocusEvalTime: Double?
+
     // MARK: - 靠近 / 游標回應性（`13_PSYCH_AUDIT.md` P2 / `02` §4，ADR-006 嚴格零功利）
 
     /// 上一輪 `notifyCursorNear`/`notifyCursorFar` 評估時，游標是否在感應圈內（供
@@ -663,7 +678,9 @@ public final class GameScene: SKScene {
 
         // 相遇卡（Stage A，`16` §2.3）：疊加的無盡氛圍層，與上面的 story beats 並存、不搶戲。
         // `motionEnabled == false` 時不冒卡（`16` §4「受 motionEnabled 控制」）。
-        if motionEnabled {
+        // P4（`22` §4）：專注中連相遇卡也不冒——純減法，選卡/推進仍照常（不入 `GameState`，
+        // 見下方 `encounterCards` 說明），只是這裡跳過「顯示」，之後恢復顯示也不會亂。
+        if motionEnabled, !focusState.isFocused {
             for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined) {
                 scheduleJourneyLog(text: card.logText, after: toastDelay)
                 toastDelay += Self.toastStaggerInterval
@@ -678,9 +695,14 @@ public final class GameScene: SKScene {
         // 的要求只在拿掉位移/縮放/閃爍，不含純 alpha 淡入淡出的文字提示；reduce-motion 使用者
         // 更不該被剝奪「有人陪」的關係語氣。相遇卡（`encounterCards`，上面那段）維持 gated 不變
         // ——那是氛圍裝飾，非情感核心，區別對待。
-        for line in Self.relationalMilestoneLines(crossedFrom: oldDistance, to: gameState.distance) {
-            scheduleJourneyLog(text: line, after: toastDelay)
-            toastDelay += Self.toastStaggerInterval
+        // P4（`22` §4）：專注中連這句「我們」語氣也不冒；深深專注時連溫柔的字都不該打斷你。
+        // 槽位（slot）判斷（`relationalMilestoneLines`）本身仍照算，只是這裡跳過顯示，退出專注
+        // 後下一次跨越槽位一樣會顯示，不會遺漏或補播錯亂（確定性選卡是 distance 的純函式）。
+        if !focusState.isFocused {
+            for line in Self.relationalMilestoneLines(crossedFrom: oldDistance, to: gameState.distance) {
+                scheduleJourneyLog(text: line, after: toastDelay)
+                toastDelay += Self.toastStaggerInterval
+            }
         }
 
         // 深夜陪伴（Stage P2，`22` §5b）：真實時刻落在深夜/破曉窗口時，依長冷卻極稀疏地冒一句
@@ -711,6 +733,10 @@ public final class GameScene: SKScene {
     /// （已確認，見 `CharacterNode.playRestLookAtViewer`），reduce-motion 下播放安全。
     /// reduce-motion 使用者更該在深夜感到有人陪，故不因 `motionEnabled == false` 關閉。
     private func presentLateNightPresenceIfNeeded(baseDelay: TimeInterval) -> TimeInterval {
+        // P4（`22` §4）：專注中深夜句也不冒——連這句「看你回來」都不該打斷埋頭中的你。
+        // 冷卻計時器不受影響（下方仍以 `lastLateNightPresenceTime`/`lastDawnPresenceTime`
+        // 節流，這裡只是提早 return，不會消耗冷卻，退出專注後一樣可正常觸發）。
+        guard !focusState.isFocused else { return baseDelay }
         let now = timeProvider.now
         let secondsIntoDay = Self.debugSecondsIntoDayOverride() ?? Self.localSecondsIntoDay(unixSeconds: now)
         var delay = baseDelay
@@ -756,6 +782,9 @@ public final class GameScene: SKScene {
     /// 排程下一次「偶爾看你」：等待秒數由 `HeroRestSchedule`（純函式）依均勻亂數換算，
     /// 平均每 40–70 秒一次、帶隨機變化，避免固定節奏顯得機械。
     private func scheduleNextHeroRest() {
+        // P4（`22` §4）：專注中不排程下一次「偶爾看你」——收起這個唯一會微拉注意力的角色行為。
+        // `notifyIdleSeconds` 偵測到退出專注時會補呼叫這裡恢復排程。
+        guard !focusState.isFocused else { return }
         let interval = HeroRestSchedule.nextIntervalSeconds(unit: Double.random(in: 0..<1))
         let wait = SKAction.wait(forDuration: interval)
         let trigger = SKAction.run { [weak self] in self?.performHeroRest() }
@@ -769,6 +798,10 @@ public final class GameScene: SKScene {
             scheduleNextHeroRest()
             return
         }
+        // P4 防禦（`22` §4）：`scheduleNextHeroRest` 已在進入專注時取消排程，這裡是極罕見競態
+        // （例如排程在專注判定翻轉的同一輪詢裡才觸發）的後備防線——專注中直接跳過，不重排；
+        // `notifyIdleSeconds` 偵測到退出專注時會補排下一次。
+        guard !focusState.isFocused else { return }
         isCharacterResting = true
         let duration = HeroRestSchedule.restDurationSeconds(unit: Double.random(in: 0..<1))
         // 雙鏡裁決（P3）：「偶爾看你」只停 2–3 秒，切入+切出休息呼吸各 0.8s 會佔掉大半、來不及
@@ -841,6 +874,19 @@ public final class GameScene: SKScene {
     /// 目前是否已在陪你歇）——與 `notifyCursorNearState` 同一種薄殼模式。
     public func notifyIdleSeconds(_ idleSeconds: Double) {
         let now = timeProvider.now
+
+        // P4：用「距上次評估過了多久」（真實時鐘差，非固定輪詢間隔假設）推進 `FocusState`
+        // （`22` §4 P4）。邊緣觸發：剛進入專注時取消任何已排程的下一次「偶爾看你」（不排程），
+        // 剛退出專注時補排回去（`endHeroRest`/`endAwayRest` 之外的第三個排程入口）。
+        let dt = lastFocusEvalTime.map { max(0, now - $0) } ?? 0
+        lastFocusEvalTime = now
+        let wasFocused = focusState.isFocused
+        focusState = FocusState.advance(focusState, idleSeconds: idleSeconds, dt: dt)
+        if focusState.isFocused, !wasFocused {
+            removeAction(forKey: Self.heroRestScheduleKey)
+        } else if !focusState.isFocused, wasFocused {
+            scheduleNextHeroRest()
+        }
 
         // P1a：先判斷「歸來」，此時 `isAwayResting` 若仍為 true，代表旅人此刻正面向你坐著
         // （陪你歇姿態）——恢復走路本身就是最自然的歡迎，這裡只加暖光，不重播轉身。
@@ -1086,7 +1132,8 @@ public final class GameScene: SKScene {
 
         // 離線回歸的相遇卡摘要（`16` §2.3）：挑最後 1–2 張以「路過了…」呈現，不逐一列出、
         // 不做錯過清單（守低喚醒/零功利）。`motionEnabled == false` 時不呈現。
-        if motionEnabled {
+        // P4（`22` §4）：專注中同樣不呈現——與 `performTick` 同一套規則。
+        if motionEnabled, !focusState.isFocused {
             let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined)
             for card in crossed.suffix(2) {
                 scheduleJourneyLog(text: "你不在時，路過了…\(card.logText)", after: delay)
@@ -1099,10 +1146,13 @@ public final class GameScene: SKScene {
         //
         // **Fable 裁決：不受 `motionEnabled` 關閉**（同上方 `relationalMilestoneLines` 的裁決理由
         // ——alpha-only 情感核心，reduce-motion 使用者更該感到有人陪；相遇卡摘要維持 gated）。
-        let relationalCrossed = Self.relationalMilestoneLines(crossedFrom: startDistance, to: gameState.distance)
-        if let last = relationalCrossed.last {
-            scheduleJourneyLog(text: last, after: delay)
-            delay += Self.toastStaggerInterval
+        // P4（`22` §4）：專注中同樣不呈現——與 `performTick` 同一套規則。
+        if !focusState.isFocused {
+            let relationalCrossed = Self.relationalMilestoneLines(crossedFrom: startDistance, to: gameState.distance)
+            if let last = relationalCrossed.last {
+                scheduleJourneyLog(text: last, after: delay)
+                delay += Self.toastStaggerInterval
+            }
         }
 
         if Self.companionEnabled, outcome.companionJustJoined {
