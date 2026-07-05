@@ -64,38 +64,6 @@ public enum PropScatter {
         Slot(baseX: 790, propName: "dome"),
     ]
 
-    /// 山谷地域槽位表（美術大改版第 2 波 `21` §2/§4）：道具池為 `regions/valley/props/`
-    /// （奇幻科技風：發光膠囊/螢幕看板/浮空平台等），間距手法同 `slots`。
-    public static let valleySlots: [Slot] = [
-        Slot(baseX: 40, propName: "tree"),
-        Slot(baseX: 115, propName: "lamppost"),
-        Slot(baseX: 190, propName: "capsule"),
-        Slot(baseX: 265, propName: "screen_panel"),
-        Slot(baseX: 340, propName: "market_stall"),
-        Slot(baseX: 415, propName: "planter"),
-        Slot(baseX: 490, propName: "crate_chest"),
-        Slot(baseX: 565, propName: "signpost_neon"),
-        Slot(baseX: 640, propName: "floating_orb"),
-        Slot(baseX: 715, propName: "hanging_frame"),
-        Slot(baseX: 790, propName: "screen_skull"),
-    ]
-
-    /// 村莊 A 地域槽位表（美術大改版第 2 波）：道具池為 `regions/village_2/props/`
-    /// （田園河谷村落：市集攤車/水井/柵欄等），間距手法同 `slots`。
-    public static let village2Slots: [Slot] = [
-        Slot(baseX: 40, propName: "tree"),
-        Slot(baseX: 115, propName: "signpost"),
-        Slot(baseX: 190, propName: "lamppost"),
-        Slot(baseX: 265, propName: "bench"),
-        Slot(baseX: 340, propName: "market_stall"),
-        Slot(baseX: 415, propName: "barrel"),
-        Slot(baseX: 490, propName: "crate"),
-        Slot(baseX: 565, propName: "planter"),
-        Slot(baseX: 640, propName: "well"),
-        Slot(baseX: 715, propName: "pedestal_planter"),
-        Slot(baseX: 790, propName: "fence"),
-    ]
-
     /// 村莊 B 地域槽位表（美術大改版第 2 波）：道具池為 `regions/village_3/props/`
     /// （森林樹屋村落：蘑菇樹墩燈/繩橋/水晶井等），間距手法同 `slots`。
     public static let village3Slots: [Slot] = [
@@ -273,8 +241,6 @@ public enum PropScatter {
         case .kingdom: return kingdomSlots
         case .seaCity: return seaCitySlots
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return slots
-        case .village2: return village2Slots
-        case .valley: return valleySlots
         case .village3: return village3Slots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots

@@ -65,13 +65,6 @@ public enum RegionNpcScatter {
         Slot(baseX: 560, npcName: "traveler"),
     ]
 
-    /// 山谷地域槽位表（`21` §3）：藥師/學者/旅人——奇幻科技風但仍溫暖無威脅的少量居民。
-    public static let valleySlots: [Slot] = [
-        Slot(baseX: 90, npcName: "apothecary"),
-        Slot(baseX: 340, npcName: "scholar"),
-        Slot(baseX: 590, npcName: "traveler"),
-    ]
-
     /// 天空地域（天空村莊/天空魔法城）共用槽位表（`21` §3）：學者/藥師/樂師——奇幻氛圍，
     /// 兩地域共用同一份排法（同款浮空奇幻風格）。
     public static let skySlots: [Slot] = [
@@ -163,9 +156,8 @@ public enum RegionNpcScatter {
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
         case .kingdom: return kingdomSlots
-        case .meadowOrigin, .village2, .village3: return pastoralSlots
+        case .meadowOrigin, .village3: return pastoralSlots
         case .seaCity: return seaCitySlots
-        case .valley: return valleySlots
         case .skyVillage, .skyCity: return skySlots
         case .riverlands, .highlands, .coastalReach: return []
         // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進循環）：居民組成見 `harborSlots`。

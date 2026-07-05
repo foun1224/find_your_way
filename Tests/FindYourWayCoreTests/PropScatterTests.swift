@@ -262,8 +262,6 @@ final class PropScatterTests: XCTestCase {
     /// `testSeaCitySlotsAreWithinSpanAndSortedAndNonEmpty` 手法），資料驅動避免 5 份幾乎重複的測試。
     func testNewRegionSlotsAreWithinSpanAndSortedAndNonEmpty() {
         let tables: [(String, [PropScatter.Slot])] = [
-            ("valley", PropScatter.valleySlots),
-            ("village2", PropScatter.village2Slots),
             ("village3", PropScatter.village3Slots),
             ("skyVillage", PropScatter.skyVillageSlots),
             ("skyCity", PropScatter.skyCitySlots),
@@ -284,8 +282,6 @@ final class PropScatterTests: XCTestCase {
     }
 
     func testSlotsForRegionPicksEachOfTheFiveNewRegionPools() {
-        XCTAssertEqual(PropScatter.slots(for: .valley), PropScatter.valleySlots)
-        XCTAssertEqual(PropScatter.slots(for: .village2), PropScatter.village2Slots)
         XCTAssertEqual(PropScatter.slots(for: .village3), PropScatter.village3Slots)
         XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageSlots)
         XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCitySlots)

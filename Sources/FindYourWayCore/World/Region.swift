@@ -4,11 +4,12 @@ import Foundation
 /// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
 /// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
 /// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 14 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
+/// **目前上線的序列是 13 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
 /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
 /// 再新增 steampunkCity）：
-/// `grassland → village2 → valley → kingdom → village3 → hotspringVillage → harbor →
-/// snowMountain → steampunkCity → skyVillage → mountainPalace → magicCity → holyCity → skyCity`。
+/// `grassland → kingdom → village3 → hotspringVillage → harbor →
+/// snowMountain → steampunkCity → futureCity → skyVillage → mountainPalace → magicCity →
+/// holyCity → skyCity`。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -20,10 +21,6 @@ public enum RegionType: Equatable, CaseIterable {
     /// （第 3 波，`21` §2），case 保留（休眠、不刪）供未來重啟或参考，`assetFolder`/
     /// `PropScatter`/`RegionNpcScatter` 對應槽位表原樣保留，只是不再被 `cycle` 選到。
     case seaCity
-    /// 村莊 A（`design/village_2.png`，田園河谷村落：風車/石橋/市集），美術大改版第 2 波新增。
-    case village2
-    /// 山谷（`design/valley.png`，浮空峽谷奇幻科技風），美術大改版第 2 波新增。
-    case valley
     /// 村莊 B（`design/village_3.png`，森林樹屋村落），美術大改版第 2 波新增。
     case village3
     /// 天空村莊（`design/sky_village.png`，浮空平台迴廊），美術大改版第 2 波新增。
@@ -81,15 +78,16 @@ public enum RegionType: Equatable, CaseIterable {
 
     /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
     /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
-    /// 再新增 steampunkCity、再新增 futureCity）：15 地域循環，旅程節奏由近人到奇幻——
-    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 溫泉山村 → 海港 → 雪山王國 → 蒸氣龐克飛船城 →
+    /// 再新增 steampunkCity、再新增 futureCity；後續接手任務移除 village2/valley）：
+    /// 13 地域循環，旅程節奏由近人到奇幻——
+    /// 草原 → 王國 → 村莊B → 溫泉山村 → 海港 → 雪山王國 → 蒸氣龐克飛船城 →
     /// 賽博龐克霓虹夜城 → 天空村莊 → 仙俠山宮 → 浮空魔法之城 → 聖光之城 → 天空魔法城 →
     /// （回到草原）。兩座科技感城市（蒸氣龐克飛船城、賽博龐克霓虹夜城）相鄰成群，之後
     /// 才進入飄浮天界序列（天空村莊起）作為寧靜的收尾對比。
     /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。其餘骨架 case
     /// （riverlands/highlands/coastalReach）保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
+        .meadowOrigin, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -113,8 +111,6 @@ public enum RegionType: Equatable, CaseIterable {
         case .kingdom: return "kingdom"
         case .seaCity: return "sea_city"
         case .meadowOrigin, .riverlands, .highlands, .coastalReach: return "grassland"
-        case .village2: return "village_2"
-        case .valley: return "valley"
         case .village3: return "village_3"
         case .skyVillage: return "sky_village"
         case .skyCity: return "sky_city"

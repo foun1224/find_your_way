@@ -28,7 +28,6 @@ final class RegionNpcScatterTests: XCTestCase {
             RegionNpcScatter.pastoralSlots,
             RegionNpcScatter.seaCitySlots,
             RegionNpcScatter.harborSlots,
-            RegionNpcScatter.valleySlots,
             RegionNpcScatter.skySlots,
             RegionNpcScatter.hotspringVillageSlots,
             RegionNpcScatter.mountainPalaceSlots,
@@ -47,7 +46,7 @@ final class RegionNpcScatterTests: XCTestCase {
     /// `21` §3 分配表：田園地域（草原/村莊 A/村莊 B）共用農夫/麵包師/孩童/商人/樂手。
     func testPastoralRegionsGetFarmerBakerChildMerchantMusician() {
         let expectedNames: Set<String> = ["farmer", "baker", "child", "merchant", "musician"]
-        for region: RegionType in [.meadowOrigin, .village2, .village3] {
+        for region: RegionType in [.meadowOrigin, .village3] {
             let slots = RegionNpcScatter.slots(for: region)
             XCTAssertEqual(Set(slots.map(\.npcName)), expectedNames, "\(region) 應配置田園居民")
             XCTAssertEqual(slots, RegionNpcScatter.pastoralSlots)
@@ -140,14 +139,6 @@ final class RegionNpcScatterTests: XCTestCase {
         XCTAssertEqual(slots, RegionNpcScatter.futureCitySlots)
     }
 
-    /// `21` §3：山谷配置藥師/學者/旅人。
-    func testValleyGetsApothecaryScholarTraveler() {
-        let expectedNames: Set<String> = ["apothecary", "scholar", "traveler"]
-        let slots = RegionNpcScatter.slots(for: .valley)
-        XCTAssertEqual(Set(slots.map(\.npcName)), expectedNames)
-        XCTAssertEqual(slots, RegionNpcScatter.valleySlots)
-    }
-
     /// `21` §3：天空地域（天空村莊/天空魔法城）共用學者/藥師/樂師（奇幻氛圍）。
     func testSkyRegionsGetScholarApothecaryMusician() {
         let expectedNames: Set<String> = ["scholar", "apothecary", "musician"]
@@ -167,7 +158,7 @@ final class RegionNpcScatterTests: XCTestCase {
 
     /// 每個地域的槽位表沿街位置間距合理（比照現行王國槽位手法）：3~4 個槽位（`21` 任務要求）。
     func testEachConfiguredRegionHasThreeToFourSlots() {
-        for region: RegionType in [.meadowOrigin, .village2, .village3, .seaCity, .harbor, .hotspringVillage, .valley, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity] {
+        for region: RegionType in [.meadowOrigin, .village3, .seaCity, .harbor, .hotspringVillage, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity] {
             let count = RegionNpcScatter.slots(for: region).count
             XCTAssertTrue((3...5).contains(count), "\(region) 應有 3~5 個沿街槽位，實際 \(count)")
         }

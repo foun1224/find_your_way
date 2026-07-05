@@ -4,17 +4,18 @@ import XCTest
 /// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5 + 美術大改版第 2 波
 /// `21_ASSET_OVERHAUL_PLAN.md` §2（第 3 波以 harbor 取代 seaCity；接手任務新增
 /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
-/// 再新增 steampunkCity、再新增 futureCity）：15 地域循環
-/// （grassland→village2→valley→kingdom→village3→hotspringVillage→harbor→snowMountain→
+/// 再新增 steampunkCity、再新增 futureCity；後續接手任務移除 village2/valley）：
+/// 13 地域循環
+/// （grassland→kingdom→village3→hotspringVillage→harbor→snowMountain→
 /// steampunkCity→futureCity→skyVillage→mountainPalace→magicCity→holyCity→skyCity→回到
-/// grassland）、邊界正確、Blend Zone crossfade 純函式（15 對相鄰邊界都要正確）。
+/// grassland）、邊界正確、Blend Zone crossfade 純函式（13 對相鄰邊界都要正確）。
 final class RegionTests: XCTestCase {
 
     /// `21` §2 上線序列（第 3 波取代版 + 接手任務新增 hotspringVillage、mountainPalace、
-    /// snowMountain、magicCity、holyCity、steampunkCity、futureCity），供以下測試逐一走過
-    /// （比逐一手寫 15 個 case 更不容易漏掉某對邊界）。
+    /// snowMountain、magicCity、holyCity、steampunkCity、futureCity；後續接手任務移除
+    /// village2/valley），供以下測試逐一走過（比逐一手寫 13 個 case 更不容易漏掉某對邊界）。
     private static let expectedCycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
+        .meadowOrigin, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
     ]
 
     func testDistanceZeroIsFirstRegion() {
@@ -30,7 +31,7 @@ final class RegionTests: XCTestCase {
     func testCyclesThroughAllEightRegionsInOrder() {
         let length = Region.regionLength
         let cycle = Self.expectedCycle
-        XCTAssertEqual(cycle.count, 15, "15 地域循環（`21` §2 + 接手任務新增 hotspringVillage、mountainPalace、snowMountain、magicCity、holyCity、steampunkCity、futureCity），這裡先確認測試本身沒寫錯數量")
+        XCTAssertEqual(cycle.count, 13, "13 地域循環（`21` §2 + 接手任務新增 hotspringVillage、mountainPalace、snowMountain、magicCity、holyCity、steampunkCity、futureCity，後續接手任務移除 village2/valley），這裡先確認測試本身沒寫錯數量")
 
         // 走兩輪（16 個 band），確認每個 band 都落在預期地域、且能無縫接回第一輪。
         for round in 0..<2 {
@@ -47,8 +48,8 @@ final class RegionTests: XCTestCase {
 
     func testCyclesBackToFirstRegionAfterEightBands() {
         let length = Region.regionLength
-        XCTAssertEqual(Region.at(distance: length * 15), .meadowOrigin)
-        XCTAssertEqual(Region.at(distance: length * 30), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 13), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 26), .meadowOrigin)
     }
 
     func testBandIndexMatchesFloorDivision() {
