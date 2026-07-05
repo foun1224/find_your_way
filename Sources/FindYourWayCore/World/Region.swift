@@ -4,8 +4,8 @@ import Foundation
 /// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
 /// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
 /// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 8 地域循環**（`21` §2）：
-/// `grassland → village2 → valley → kingdom → village3 → seaCity → skyVillage → skyCity`。
+/// **目前上線的序列是 8 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity）：
+/// `grassland → village2 → valley → kingdom → village3 → harbor → skyVillage → skyCity`。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -13,6 +13,9 @@ public enum RegionType: Equatable, CaseIterable {
     case highlands
     case coastalReach
     case kingdom
+    /// 海城（`design/sea_city.png`，Stage C 舊格式地域）：已被 `harbor` 取代排出 8 地域循環
+    /// （第 3 波，`21` §2），case 保留（休眠、不刪）供未來重啟或参考，`assetFolder`/
+    /// `PropScatter`/`RegionNpcScatter` 對應槽位表原樣保留，只是不再被 `cycle` 選到。
     case seaCity
     /// 村莊 A（`design/village_2.png`，田園河谷村落：風車/石橋/市集），美術大改版第 2 波新增。
     case village2
@@ -25,17 +28,18 @@ public enum RegionType: Equatable, CaseIterable {
     /// 天空魔法城（`design/sky_city_magic.png`，金色魔法水晶城），美術大改版第 2 波新增。
     case skyCity
     /// 海港（`design/harbor_test.png`，`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」
-    /// 美術流程驗證地域）：只有遠景含天空，中景/前景/道具皆洋紅底去背成透明，可疊出真正的
-    /// 多層視差（`isLayered`）。只供 `FYW_DEBUG_REGION=harbor` 截圖驗收，**不排進 8 地域循環**
-    /// （`cycle` 不含它，`Region.at` 永遠不會選到）。
+    /// 美術流程驗證地域，已驗證通過）：只有遠景含天空，中景/前景/道具皆洋紅底去背成透明，
+    /// 疊出真正的多層視差（`isLayered`）。取代 `seaCity` 排進 8 地域循環（`cycle`）。
     case harbor
 
-    /// 美術大改版第 2 波上線序列（`21` §2）：8 地域循環，旅程節奏由近人到奇幻——
-    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 海城 → 天空村莊 → 天空魔法城 → （回到草原）。
+    /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity）：8 地域循環，
+    /// 旅程節奏由近人到奇幻——
+    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 海港 → 天空村莊 → 天空魔法城 → （回到草原）。
+    /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。
     /// 其餘骨架 case（riverlands/highlands/coastalReach）保留給未來地域，暫不進入
     /// `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .seaCity, .skyVillage, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .harbor, .skyVillage, .skyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -72,7 +76,7 @@ public enum RegionType: Equatable, CaseIterable {
     /// mid/fore 素材是**透明去背過的獨立物件層**（非各自含天空的完整場景），
     /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
     /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
-    /// far+ground」的過渡 workaround。目前只有 `harbor`（驗證用，未排進 8 地域循環）。
+    /// far+ground」的過渡 workaround。目前只有 `harbor`（已排進 8 地域循環）。
     private static let layeredRegions: Set<RegionType> = [.harbor]
 
     /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。

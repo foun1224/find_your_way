@@ -323,6 +323,41 @@ def remove_magenta_spill(img: Image) -> Image:
     return out
 
 
+def defringe_magenta_edges(img: Image, passes: int = 2) -> Image:
+    """去除洋紅去背後、物件輪廓上殘留的「抗鋸齒洋紅光暈」（洋紅與內容混色的 1~2px 邊緣像素，
+    例如 `(205,87,126)`/`(121,11,203)`——G 明顯凹陷、R≈B 或偏紫，散在物件邊緣形成可見的
+    粉紫雜邊）。`remove_magenta_spill` 的 `|r-b|` 護欄為了不誤傷暖色花草會放過這些偏粉/偏紫
+    的邊緣像素；本函式改用「**只清緊鄰透明的邊緣像素**」策略：洋紅系（G 相對凹陷）且**四鄰
+    至少一個是透明**的像素才清掉——因為真正的道具內容（花瓣/木頭）位於物件內部、不鄰透明，
+    不會被誤傷；只有「去背邊界上被磁染的抗鋸齒像素」會鄰透明而被清。跑 `passes` 次以吃掉
+    1~2px 的光暈。"""
+    w, h = img.width, img.height
+    out = Image(w, h, [row[:] for row in img.pixels])
+    for _ in range(passes):
+        clear = []
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = out.pixels[y][x]
+                if a == 0:
+                    continue
+                lo = min(r, b)
+                if lo < 90 or g >= lo * 0.78:
+                    continue  # 非洋紅/粉紫系（G 沒有明顯凹陷）→ 放過
+                # 四鄰有透明才算「邊緣被磁染」
+                near_transp = False
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and out.pixels[ny][nx][3] == 0:
+                        near_transp = True
+                        break
+                if near_transp:
+                    clear.append((x, y))
+        for x, y in clear:
+            px = out.pixels[y][x]
+            out.pixels[y][x] = (px[0], px[1], px[2], 0)
+    return out
+
+
 def strip_magenta_bleed_rows(img: Image, g_margin: int = 15, min_brightness: int = 150, max_rows: int = 8) -> Image:
     """`design/harbor_test.png` 每一帶（far/mid/fore/...）交界處都疊了細細的分隔線，這條線
     本身在洋紅底上做抗鋸齒時，會整條「洋紅→白」漸層（例如 mid 帶最底兩列量到
@@ -385,7 +420,10 @@ def patch_magenta_columns(img: Image, tol: int = 75) -> Image:
     w, h = img.width, img.height
 
     def is_magenta(rgba) -> bool:
-        return _is_magenta_hued(rgba, g_max=tol, min_rb=255 - tol, max_rb_diff=2 * tol)
+        # 亮洋紅（原絕對門檻）或較暗/抗鋸齒的洋紅（相對門檻，補抓 ground 上緣殘留的暗洋紅列）。
+        # 灰石陰影 g≈r≈b、相對門檻要求 G 明顯凹陷，不會誤中石材。
+        return _is_magenta_hued(rgba, g_max=tol, min_rb=255 - tol, max_rb_diff=2 * tol) \
+            or _is_magenta_hued_relative(rgba)
 
     out = Image(w, h, [row[:] for row in img.pixels])
     for x in range(w):
@@ -1352,6 +1390,10 @@ def slice_new_region_bg(sheet: Image) -> dict:
                 img = patch_label_box(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
         if fade_px:
             img = fade_top_edge(img, fade_px=fade_px)
+        if name == "far":
+            # far 橫向平鋪的接縫治本，推廣到所有地域（同 `slice_harbor_bg` 手法）：
+            # 這裡覆蓋 valley/village_2/village_3/sky_village/sky_city 五個新地域。
+            img = make_horizontally_seamless(img, blend_px=64)
         out[name] = img
     return out
 
@@ -1414,11 +1456,11 @@ def slice_harbor_bg(sheet: Image) -> dict:
 
     mid_raw = sheet.crop(HARBOR_BG_MID.x, HARBOR_BG_MID.y, HARBOR_BG_MID.w, HARBOR_BG_MID.h)
     mid_raw = patch_label_box(mid_raw, HARBOR_LABEL_RECT)
-    mid = strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60)))
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
 
     fore_raw = sheet.crop(HARBOR_BG_FORE.x, HARBOR_BG_FORE.y, HARBOR_BG_FORE.w, HARBOR_BG_FORE.h)
     fore_raw = patch_label_box(fore_raw, HARBOR_LABEL_RECT)
-    fore = strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60)))
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
 
     ground_raw = sheet.crop(HARBOR_BG_GROUND.x, HARBOR_BG_GROUND.y, HARBOR_BG_GROUND.w, HARBOR_BG_GROUND.h)
     ground = patch_magenta_columns(ground_raw)
@@ -1438,7 +1480,7 @@ def slice_harbor_props(sheet: Image) -> dict:
         w = min(region.w, items.width - region.x)
         h = min(region.h, items.height - region.y)
         cropped = items.crop(region.x, region.y, w, h)
-        keyed = remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60))
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
         if name in _HARBOR_DILATED_PROPS:
             keyed = keep_largest_component_dilated(keyed, dilate_px=2)
         else:
@@ -1559,6 +1601,10 @@ def main() -> None:
         if name == "mid":
             # mid 疊在 far 之前、上緣與 far 重疊，淡出上緣讓接縫變成漸層（見 `fade_top_edge`）。
             img = fade_top_edge(img, fade_px=BG_MID_TOP_FADE_PX)
+        if name == "far":
+            # far 橫向平鋪的接縫治本（同 `slice_harbor_bg` 手法，`make_horizontally_seamless`
+            # docstring）：推廣到所有地域，過渡期舊格式地域也無縫 loop。
+            img = make_horizontally_seamless(img, blend_px=64)
         for out_dir in (bg_dir, meadow_bg_dir):
             out_path = os.path.join(out_dir, f"{name}.png")
             encode_png(img, out_path)
@@ -1664,6 +1710,9 @@ def main() -> None:
             if fade_px:
                 # mid/fore 疊在後方層之前、上緣重疊，淡出讓接縫變漸層（同 `BG_MID_TOP_FADE_PX` 手法）。
                 img = fade_top_edge(img, fade_px=fade_px)
+            if name == "far":
+                # far 橫向平鋪的接縫治本，推廣到所有地域（同 `slice_harbor_bg` 手法）。
+                img = make_horizontally_seamless(img, blend_px=64)
             out_path = os.path.join(kingdom_bg_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
@@ -1711,6 +1760,9 @@ def main() -> None:
                 img = patch_label_box(img, SEA_CITY_LABEL_BOX_RECTS[label_key])
             if fade_px:
                 img = fade_top_edge(img, fade_px=fade_px)
+            if name == "far":
+                # far 橫向平鋪的接縫治本，推廣到所有地域（同 `slice_harbor_bg` 手法）。
+                img = make_horizontally_seamless(img, blend_px=64)
             out_path = os.path.join(sea_city_bg_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")
@@ -1753,6 +1805,9 @@ def main() -> None:
                     img = patch_label_box(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
             if fade_px:
                 img = fade_top_edge(img, fade_px=fade_px)
+            if name == "far":
+                # far 橫向平鋪的接縫治本，推廣到所有地域（同 `slice_harbor_bg` 手法）。
+                img = make_horizontally_seamless(img, blend_px=64)
             out_path = os.path.join(grassland_bg_dir, f"{name}.png")
             encode_png(img, out_path)
             print(f"wrote {out_path} ({img.width}x{img.height})")

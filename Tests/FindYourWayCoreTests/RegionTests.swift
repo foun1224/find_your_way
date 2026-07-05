@@ -2,14 +2,15 @@ import XCTest
 @testable import FindYourWayCore
 
 /// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5 + 美術大改版第 2 波
-/// `21_ASSET_OVERHAUL_PLAN.md` §2：8 地域循環（grassland→village2→valley→kingdom→
-/// village3→seaCity→skyVillage→skyCity→回到 grassland）、邊界正確、Blend Zone crossfade
-/// 純函式（8 對相鄰邊界都要正確）。
+/// `21_ASSET_OVERHAUL_PLAN.md` §2（第 3 波以 harbor 取代 seaCity）：8 地域循環（grassland→
+/// village2→valley→kingdom→village3→harbor→skyVillage→skyCity→回到 grassland）、
+/// 邊界正確、Blend Zone crossfade 純函式（8 對相鄰邊界都要正確）。
 final class RegionTests: XCTestCase {
 
-    /// `21` §2 上線序列，供以下測試逐一走過（比逐一手寫 8 個 case 更不容易漏掉某對邊界）。
+    /// `21` §2 上線序列（第 3 波取代版），供以下測試逐一走過（比逐一手寫 8 個 case 更不容易
+    /// 漏掉某對邊界）。
     private static let expectedCycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .seaCity, .skyVillage, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .harbor, .skyVillage, .skyCity,
     ]
 
     func testDistanceZeroIsFirstRegion() {

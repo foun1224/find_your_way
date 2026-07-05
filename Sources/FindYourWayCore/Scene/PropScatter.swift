@@ -146,7 +146,8 @@ public enum PropScatter {
         Slot(baseX: 788, propName: "gate"),
     ]
 
-    /// 港口海城地域槽位表（`19_STAGE_C_SPEC.md` §1/§3，第三地域）：道具池換成
+    /// 港口海城地域槽位表（`19_STAGE_C_SPEC.md` §1/§3，第三地域；已被 `harbor` 取代排出
+    /// 8 地域循環，`21` §2 第 3 波，但槽位表原樣保留、休眠不刪）：道具池換成
     /// `regions/sea_city/props/` 切出的海城道具（含碼頭特有的繫纜柱/吊車），
     /// 間距手法同 `slots`/`kingdomSlots`（確定性、依 `baseX` 遞增排列）。
     public static let seaCitySlots: [Slot] = [
@@ -162,6 +163,19 @@ public enum PropScatter {
         Slot(baseX: 800, propName: "pillar"),
     ]
 
+    /// 海港地域槽位表（`20_ASSET_SHEET_SPEC.md` §8A 驗證通過，`21` §2 第 3 波取代
+    /// `seaCity` 排進 8 地域循環）：道具池換成 `regions/harbor/props/` 切出的港口道具
+    /// （沿街市集攤車/水岸標示/繫船錨牌等），間距手法同 `seaCitySlots`
+    /// （確定性、依 `baseX` 遞增排列，均勻散佈在同一個 `span` 週期內）。
+    public static let harborSlots: [Slot] = [
+        Slot(baseX: 40, propName: "signpost"),
+        Slot(baseX: 130, propName: "lamp"),
+        Slot(baseX: 220, propName: "anchor_sign"),
+        Slot(baseX: 320, propName: "barrel"),
+        Slot(baseX: 420, propName: "market_cart"),
+        Slot(baseX: 520, propName: "planter"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -174,10 +188,9 @@ public enum PropScatter {
         case .village3: return village3Slots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots
-        // 海港（`20` §8A 驗證地域）：道具美術已切好（`regions/harbor/props/`），但尚未排入
-        // 8 地域循環，暫不配置散落槽位（`ParallaxBackground` 的真多層視差驗收重點是
-        // far/mid/fore/ground 背景堆疊，非近景道具散落）。
-        case .harbor: return []
+        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進 8 地域循環）：
+        // 道具池見 `harborSlots`。
+        case .harbor: return harborSlots
         }
     }
 

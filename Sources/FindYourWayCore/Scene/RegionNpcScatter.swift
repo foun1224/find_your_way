@@ -48,8 +48,18 @@ public enum RegionNpcScatter {
         Slot(baseX: 730, npcName: "musician"),
     ]
 
-    /// 港口海城地域槽位表（`21` §3）：漁夫/商人/旅人——碼頭往來的人口組成。
+    /// 港口海城地域槽位表（`21` §3；`seaCity` 已被 `harbor` 取代排出 8 地域循環，
+    /// 槽位表原樣保留、休眠不刪）：漁夫/商人/旅人——碼頭往來的人口組成。
     public static let seaCitySlots: [Slot] = [
+        Slot(baseX: 80, npcName: "fisher"),
+        Slot(baseX: 320, npcName: "merchant"),
+        Slot(baseX: 560, npcName: "traveler"),
+    ]
+
+    /// 海港地域槽位表（`20` §8A 驗證通過，`21` §2 第 3 波取代 `seaCity` 排進 8 地域循環）：
+    /// 沿用原 `seaCitySlots` 的居民組成（漁夫/商人/旅人，碼頭往來的人口組成），
+    /// 間距手法相同。
+    public static let harborSlots: [Slot] = [
         Slot(baseX: 80, npcName: "fisher"),
         Slot(baseX: 320, npcName: "merchant"),
         Slot(baseX: 560, npcName: "traveler"),
@@ -81,8 +91,9 @@ public enum RegionNpcScatter {
         case .valley: return valleySlots
         case .skyVillage, .skyCity: return skySlots
         case .riverlands, .highlands, .coastalReach: return []
-        // 海港（`20` §8A 驗證地域，未排入 8 地域循環）：尚無專屬 NPC 分配，暫不配置。
-        case .harbor: return []
+        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進 8 地域循環）：
+        // 居民組成見 `harborSlots`。
+        case .harbor: return harborSlots
         }
     }
 

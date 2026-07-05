@@ -15,8 +15,10 @@ public final class CharacterNode: SKSpriteNode {
     /// `anchorPoint = (0.5, 0)`，`screenY` 即角色腳邊落在地面平台頂線的位置。
     public static let displayHeight: CGFloat = 44
 
-    /// 走路 frame 節奏（每格秒數）。~5fps 的悠閒踏步。
-    private static let stepInterval: TimeInterval = 1.0 / 5.0
+    /// 一個完整走路循環的秒數（與幀數無關）。每格秒數 = 此值 ÷ 幀數，
+    /// 這樣不論走路幀有幾張（舊 2~3 幀或新 8 幀完整循環）節奏都一致、不會因幀多變拖沓。
+    /// 0.9s/循環 ≈ 悠閒但不月球漫步的散步節奏。
+    private static let walkCycleDuration: TimeInterval = 0.9
 
     /// 暖心回應動作 key（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不影響任何邏輯狀態）。
     private static let warmResponseKey = "warmResponse"
@@ -115,7 +117,8 @@ public final class CharacterNode: SKSpriteNode {
         for texture in textures {
             texture.filteringMode = .nearest
         }
-        let animate = SKAction.animate(with: textures, timePerFrame: Self.stepInterval, resize: false, restore: false)
+        let timePerFrame = Self.walkCycleDuration / Double(textures.count)
+        let animate = SKAction.animate(with: textures, timePerFrame: timePerFrame, resize: false, restore: false)
         run(SKAction.repeatForever(animate), withKey: "walkCycle")
     }
 

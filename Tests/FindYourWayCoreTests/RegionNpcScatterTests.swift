@@ -27,6 +27,7 @@ final class RegionNpcScatterTests: XCTestCase {
             RegionNpcScatter.kingdomSlots,
             RegionNpcScatter.pastoralSlots,
             RegionNpcScatter.seaCitySlots,
+            RegionNpcScatter.harborSlots,
             RegionNpcScatter.valleySlots,
             RegionNpcScatter.skySlots,
         ]
@@ -54,12 +55,21 @@ final class RegionNpcScatterTests: XCTestCase {
         XCTAssertEqual(slots, RegionNpcScatter.kingdomSlots)
     }
 
-    /// `21` §3：海城配置漁夫/商人/旅人。
+    /// `21` §3：海城配置漁夫/商人/旅人（`seaCity` case 已休眠、不再進入 8 地域循環，
+    /// 槽位表仍保留、不弱化這條斷言）。
     func testSeaCityGetsFisherMerchantTraveler() {
         let expectedNames: Set<String> = ["fisher", "merchant", "traveler"]
         let slots = RegionNpcScatter.slots(for: .seaCity)
         XCTAssertEqual(Set(slots.map(\.npcName)), expectedNames)
         XCTAssertEqual(slots, RegionNpcScatter.seaCitySlots)
+    }
+
+    /// `21` §2/§3 第 3 波：海港取代海城排進 8 地域循環，居民組成沿用漁夫/商人/旅人。
+    func testHarborGetsFisherMerchantTraveler() {
+        let expectedNames: Set<String> = ["fisher", "merchant", "traveler"]
+        let slots = RegionNpcScatter.slots(for: .harbor)
+        XCTAssertEqual(Set(slots.map(\.npcName)), expectedNames)
+        XCTAssertEqual(slots, RegionNpcScatter.harborSlots)
     }
 
     /// `21` §3：山谷配置藥師/學者/旅人。
@@ -89,7 +99,7 @@ final class RegionNpcScatterTests: XCTestCase {
 
     /// 每個地域的槽位表沿街位置間距合理（比照現行王國槽位手法）：3~4 個槽位（`21` 任務要求）。
     func testEachConfiguredRegionHasThreeToFourSlots() {
-        for region: RegionType in [.meadowOrigin, .village2, .village3, .seaCity, .valley, .skyVillage, .skyCity] {
+        for region: RegionType in [.meadowOrigin, .village2, .village3, .seaCity, .harbor, .valley, .skyVillage, .skyCity] {
             let count = RegionNpcScatter.slots(for: region).count
             XCTAssertTrue((3...5).contains(count), "\(region) 應有 3~5 個沿街槽位，實際 \(count)")
         }

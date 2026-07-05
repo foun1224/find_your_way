@@ -95,6 +95,27 @@ final class PropScatterTests: XCTestCase {
         XCTAssertEqual(PropScatter.slots(for: .seaCity), PropScatter.seaCitySlots)
     }
 
+    // MARK: - 港口地域道具池（`20_ASSET_SHEET_SPEC.md` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進 8 地域循環）
+
+    func testHarborSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.harborSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "海港槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.harborSlots.isEmpty, "海港槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.harborSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksHarborPool() {
+        XCTAssertEqual(PropScatter.slots(for: .harbor), PropScatter.harborSlots)
+        XCTAssertFalse(PropScatter.slots(for: .harbor).isEmpty, "海港已排進 8 地域循環，不該再是空槽位表")
+    }
+
     // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）
 
     /// 逐一驗證 5 個新地域槽位表的基本不變量（同 `testKingdomSlotsAreWithinSpanAndSortedAndNonEmpty`/

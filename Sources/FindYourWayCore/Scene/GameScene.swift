@@ -220,7 +220,7 @@ public final class GameScene: SKScene {
         case "sky_village", "skyvillage": return .skyVillage
         case "sky_city", "skycity", "sky_city_magic": return .skyCity
         // 海港（`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」美術流程驗證地域，
-        // `RegionType.harbor`）：只供本旗標截圖驗收，未排進 8 地域循環。
+        // `RegionType.harbor`，已驗證通過並排進 8 地域循環，取代 seaCity）。
         case "harbor": return .harbor
         default: return nil
         }
