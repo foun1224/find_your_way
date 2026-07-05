@@ -379,6 +379,19 @@ public final class GameScene: SKScene {
         dayNightOverlay?.position = center
         weatherOverlay?.size = size
         weatherOverlay?.position = center
+
+        // 拉場景大小 reflow（使用者需求 2026-07-05）：視窗（＝SKView contentView）改尺寸時，
+        // 依新 `size` 重新鋪排整個世界——拉寬露出更多背景、拉高填滿更多天空。
+        // 手法：重定位角色錨點 x（`characterScreenX` 依寬度算左側 20–25%，y 仍為地面線）→
+        // 令 region type 失效，逼 `updateRegionVisuals`/`replaceCurrentRegion` 用新 `size`
+        // **重建**背景層（far 依新高度重算 `farScale`、tile 依新寬度重新平鋪足夠張數）→
+        // `applyWorldScroll` 依新寬度把背景/道具/地標捲動定位。尚未 buildScene（角色/地域
+        // 未建）或降級純色背景時略過（此時無可 reflow 的內容）。
+        guard oldSize != size, character != nil, currentRegionVisuals != nil, !usingFallbackBackground else { return }
+        character?.position.x = CGFloat(WorldScroll.characterScreenX(sceneWidth: Double(size.width)))
+        currentRegionType = nil
+        nextRegionType = nil
+        applyWorldScroll(distance: displayedDistance)
     }
 
     public override func update(_ currentTime: TimeInterval) {

@@ -13,10 +13,20 @@ public struct Preferences: Equatable {
     /// 用預設右下角」（`PetWindowConfig.bottomRightFrame`）。與遊戲主存檔分離，屬偏好同層。
     public var windowOrigin: CGPoint?
 
-    public init(reduceMotionOverride: Bool? = nil, volume: Double = 1.0, windowOrigin: CGPoint? = nil) {
+    /// 桌寵視窗記憶尺寸（拉場景大小，2026-07-05）：使用者拖右下角拉手縮放後記住的尺寸；
+    /// `nil` 表示「未縮放過，用 `PetWindowConfig.defaultSize`」。與 `windowOrigin` 同層。
+    public var windowSize: CGSize?
+
+    public init(
+        reduceMotionOverride: Bool? = nil,
+        volume: Double = 1.0,
+        windowOrigin: CGPoint? = nil,
+        windowSize: CGSize? = nil
+    ) {
         self.reduceMotionOverride = reduceMotionOverride
         self.volume = volume
         self.windowOrigin = windowOrigin
+        self.windowSize = windowSize
     }
 }
 
@@ -26,4 +36,6 @@ public enum PreferencesKey {
     public static let volume = "com.findyourway.preferences.volume"
     public static let windowOriginX = "com.findyourway.preferences.windowOriginX"
     public static let windowOriginY = "com.findyourway.preferences.windowOriginY"
+    public static let windowWidth = "com.findyourway.preferences.windowWidth"
+    public static let windowHeight = "com.findyourway.preferences.windowHeight"
 }

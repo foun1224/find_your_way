@@ -24,6 +24,13 @@ final class PetWindow: NSWindow {
     /// 這次按下-放開，是否已經被判定為「拖曳」（超過門檻後就不會變回點擊）。
     private var isDraggingWindow = false
 
+    /// 拉縮（右下角拉手）狀態：按下時若落在拉手感應區，本次手勢即為 resize（不再是移動/點擊）。
+    private var isResizingWindow = false
+    /// 拉縮開始時的完整視窗 frame（用於算相對位移後的新 frame）。
+    private var resizeStartWindowFrame: CGRect?
+    /// 確定是「拉縮」且已放開時呼叫，帶上最終 frame，供外部存到偏好（記住尺寸）。
+    var onWindowResizeEnded: ((CGRect) -> Void)?
+
     /// 確定是「點擊」（放開時位移 < 門檻）且命中角色時呼叫，供外部觸發暖心回應（ADR-006）。
     var onCharacterClicked: (() -> Void)?
     /// 確定是「拖曳」且已放開時呼叫，帶上最終 origin，供外部存到偏好（ADR-011）。
@@ -83,7 +90,7 @@ final class PetWindow: NSWindow {
             handleMouseDown(event)
         case .leftMouseDragged:
             handleMouseDragged(event)
-            if isDraggingWindow { return }
+            if isResizingWindow || isDraggingWindow { return }
         case .leftMouseUp:
             handleMouseUp(event)
         default:
@@ -96,13 +103,33 @@ final class PetWindow: NSWindow {
         dragStartScreenLocation = NSEvent.mouseLocation
         dragStartWindowOrigin = frame.origin
         isDraggingWindow = false
+
+        // 按下點若落在右下角拉手感應區 → 本次手勢為「拉縮」（`04`/使用者需求 reflow resize）。
+        // 拉縮與移動互斥：一旦判定 resize 就不再走移動/點擊分支。
+        if PetWindowConfig.isInResizeGrip(pointInWindow: event.locationInWindow, windowSize: frame.size) {
+            isResizingWindow = true
+            resizeStartWindowFrame = frame
+        } else {
+            isResizingWindow = false
+            resizeStartWindowFrame = nil
+        }
     }
 
     private func handleMouseDragged(_ event: NSEvent) {
-        guard let startScreen = dragStartScreenLocation, let startOrigin = dragStartWindowOrigin else { return }
+        guard let startScreen = dragStartScreenLocation else { return }
         let current = NSEvent.mouseLocation
         let dx = Double(current.x - startScreen.x)
         let dy = Double(current.y - startScreen.y)
+
+        // 拉縮分支：依右下角拉手位移算新 frame（左上角錨定），夾在螢幕可視範圍內即時套用。
+        // SKView 為 contentView，會隨視窗改尺寸 → `GameScene.didChangeSize` 觸發 reflow。
+        if isResizingWindow, let startFrame = resizeStartWindowFrame {
+            let resized = PetWindowConfig.resizedFrame(startFrame: startFrame, dx: dx, dy: dy)
+            setFrame(clampedFrame(resized), display: true)
+            return
+        }
+
+        guard let startOrigin = dragStartWindowOrigin else { return }
 
         if !isDraggingWindow {
             guard WindowDragGesture.exceedsThreshold(dx: dx, dy: dy) else { return }
@@ -117,9 +144,13 @@ final class PetWindow: NSWindow {
         defer {
             dragStartScreenLocation = nil
             dragStartWindowOrigin = nil
+            resizeStartWindowFrame = nil
         }
 
-        if isDraggingWindow {
+        if isResizingWindow {
+            isResizingWindow = false
+            onWindowResizeEnded?(frame)
+        } else if isDraggingWindow {
             isDraggingWindow = false
             onWindowDragEnded?(frame.origin)
         } else if characterHitTest?(event.locationInWindow) == true {
@@ -141,5 +172,29 @@ final class PetWindow: NSWindow {
             return origin
         }
         return WindowPlacement.clampedOrigin(origin, windowSize: frame.size, visibleFrame: owningFrame)
+    }
+
+    /// 拉縮時把新 frame 夾在所在螢幕可視範圍內：先把長寬 cap 到不超過可視範圍，再把 origin
+    /// 夾回範圍內（維持左上角錨定的直覺——先收 size 再夾 origin，避免拉到螢幕外）。
+    private func clampedFrame(_ rect: CGRect) -> CGRect {
+        let visibleFrames = NSScreen.screens.map { $0.visibleFrame }
+        guard let owningFrame = WindowPlacement.owningVisibleFrame(
+            for: rect.origin,
+            windowSize: rect.size,
+            visibleFrames: visibleFrames
+        ) ?? visibleFrames.first else {
+            return rect
+        }
+        let cappedSize = CGSize(
+            width: min(rect.size.width, owningFrame.width),
+            height: min(rect.size.height, owningFrame.height)
+        )
+        // size 被 cap 時維持上緣不動（reflow resize 的直覺：從右下拉手拉、上緣是錨點）。
+        let topFixedY = rect.origin.y + rect.size.height
+        let adjustedOrigin = CGPoint(x: rect.origin.x, y: topFixedY - cappedSize.height)
+        let clampedOrigin = WindowPlacement.clampedOrigin(
+            adjustedOrigin, windowSize: cappedSize, visibleFrame: owningFrame
+        )
+        return CGRect(origin: clampedOrigin, size: cappedSize)
     }
 }

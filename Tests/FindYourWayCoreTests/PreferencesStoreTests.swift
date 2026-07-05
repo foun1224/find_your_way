@@ -80,6 +80,30 @@ final class PreferencesStoreTests: XCTestCase {
         XCTAssertNil(store.load().windowOrigin)
     }
 
+    // MARK: - 拉場景大小：視窗尺寸記憶（2026-07-05）
+
+    func testWindowSizeNilByDefault() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        XCTAssertNil(store.load().windowSize)
+    }
+
+    func testWindowSizeRoundTrip() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        store.setWindowSize(CGSize(width: 480.5, height: 270.25))
+
+        let loaded = store.load().windowSize
+        XCTAssertEqual(Double(loaded?.width ?? -1), 480.5, accuracy: 0.0001)
+        XCTAssertEqual(Double(loaded?.height ?? -1), 270.25, accuracy: 0.0001)
+    }
+
+    func testClearingWindowSizeReturnsToNil() {
+        let store = PreferencesStore(defaults: makeIsolatedDefaults())
+        store.setWindowSize(CGSize(width: 400, height: 300))
+        store.setWindowSize(nil)
+
+        XCTAssertNil(store.load().windowSize)
+    }
+
     func testWindowOriginDoesNotLeakIntoStandard() {
         let isolated = makeIsolatedDefaults()
         let store = PreferencesStore(defaults: isolated)

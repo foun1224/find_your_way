@@ -21,8 +21,28 @@ public final class PreferencesStore {
         let volume = hasVolume ? defaults.double(forKey: PreferencesKey.volume) : 1.0
 
         let windowOrigin = loadWindowOrigin()
+        let windowSize = loadWindowSize()
 
-        return Preferences(reduceMotionOverride: reduceMotionOverride, volume: volume, windowOrigin: windowOrigin)
+        return Preferences(
+            reduceMotionOverride: reduceMotionOverride,
+            volume: volume,
+            windowOrigin: windowOrigin,
+            windowSize: windowSize
+        )
+    }
+
+    /// 讀出記憶的視窗尺寸（拉場景大小）；長寬都寫過才視為有記憶（同 `loadWindowOrigin` 的
+    /// 「兩軸都要有」保護，避免只寫一半造成錯位）。
+    private func loadWindowSize() -> CGSize? {
+        guard
+            defaults.object(forKey: PreferencesKey.windowWidth) != nil,
+            defaults.object(forKey: PreferencesKey.windowHeight) != nil
+        else {
+            return nil
+        }
+        let w = defaults.double(forKey: PreferencesKey.windowWidth)
+        let h = defaults.double(forKey: PreferencesKey.windowHeight)
+        return CGSize(width: w, height: h)
     }
 
     /// 讀出記憶的視窗位置（ADR-011）；兩個座標軸必須都寫過才視為「有記憶位置」，
@@ -60,6 +80,17 @@ public final class PreferencesStore {
         } else {
             defaults.removeObject(forKey: PreferencesKey.windowOriginX)
             defaults.removeObject(forKey: PreferencesKey.windowOriginY)
+        }
+    }
+
+    /// 寫入縮放後的視窗尺寸（拉場景大小）；傳 `nil` 表示清除記憶、回到 `defaultSize`。
+    public func setWindowSize(_ size: CGSize?) {
+        if let size {
+            defaults.set(Double(size.width), forKey: PreferencesKey.windowWidth)
+            defaults.set(Double(size.height), forKey: PreferencesKey.windowHeight)
+        } else {
+            defaults.removeObject(forKey: PreferencesKey.windowWidth)
+            defaults.removeObject(forKey: PreferencesKey.windowHeight)
         }
     }
 }

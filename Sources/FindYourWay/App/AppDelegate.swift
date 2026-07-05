@@ -37,7 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let screen = NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
 
-        let size = PetWindowConfig.defaultSize
+        // 拉場景大小（2026-07-05）：有記憶尺寸就用它（夾在 `minSize` 以上防退化），否則預設。
+        let size = savedWindowSize() ?? PetWindowConfig.defaultSize
         // ADR-011：有記憶位置（且仍落在某個螢幕內）就開在該處，否則走既有右下角預設。
         let frame = initialFrame(defaultVisibleFrame: visibleFrame, windowSize: size)
 
@@ -69,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         window.onWindowDragEnded = { [weak self] origin in
             self?.preferencesStore.setWindowOrigin(origin)
+        }
+        // 拉場景大小放開時：記住最終尺寸「與」origin（右下角拉手也會動到 origin.y，兩者一起存）。
+        window.onWindowResizeEnded = { [weak self] frame in
+            self?.preferencesStore.setWindowSize(frame.size)
+            self?.preferencesStore.setWindowOrigin(frame.origin)
         }
         window.characterHitTest = { [weak self] pointInWindow in
             self?.gameScene?.isPointOnCharacter(pointInWindow) ?? false
@@ -210,6 +216,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 多螢幕穩定（`10` §7 / ADR-011）：螢幕參數變更（接拔/解析度）時重新錨定。
 
+    /// 讀出記憶的視窗尺寸（拉場景大小），夾在 `minSize` 以上防退化；未記憶過回傳 `nil`
+    /// （呼叫端退回 `defaultSize`）。
+    private func savedWindowSize() -> CGSize? {
+        guard let saved = preferencesStore.load().windowSize else { return nil }
+        return CGSize(
+            width: max(PetWindowConfig.minSize.width, saved.width),
+            height: max(PetWindowConfig.minSize.height, saved.height)
+        )
+    }
+
     /// 啟動時的初始 frame：有記憶位置（ADR-011）且仍落在目前任一螢幕內就用它（夾在該螢幕
     /// 可視範圍內，防止記憶位置在螢幕解析度變動後跑到畫面外）；否則走既有右下角預設。
     private func initialFrame(defaultVisibleFrame: CGRect, windowSize: CGSize) -> CGRect {
@@ -246,7 +262,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let window = petWindow else { return }
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let size = PetWindowConfig.defaultSize
+        // 保留使用者拉縮後的當前尺寸（不重置回 defaultSize），只重新錨定位置。
+        let size = window.frame.size
 
         let visibleFrames = NSScreen.screens.map { $0.visibleFrame }
         let currentOrigin = window.frame.origin

@@ -78,6 +78,41 @@ final class PetWindowConfigTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(frame.minY, visibleFrame.minY)
     }
 
+    // MARK: - 拉場景大小（右下角拉手 resize，2026-07-05）
+
+    func testResizeGripHitOnlyInBottomRightCorner() {
+        let size = CGSize(width: 320, height: 180)
+        let grip = PetWindowConfig.resizeGripSize
+        // 右下角內（x 近寬、y 近 0）→ 命中。
+        XCTAssertTrue(PetWindowConfig.isInResizeGrip(pointInWindow: CGPoint(x: 320 - 5, y: 5), windowSize: size))
+        XCTAssertTrue(PetWindowConfig.isInResizeGrip(pointInWindow: CGPoint(x: 320 - grip, y: grip), windowSize: size))
+        // 中央、左下、右上、左上 → 不命中。
+        XCTAssertFalse(PetWindowConfig.isInResizeGrip(pointInWindow: CGPoint(x: 160, y: 90), windowSize: size))
+        XCTAssertFalse(PetWindowConfig.isInResizeGrip(pointInWindow: CGPoint(x: 5, y: 5), windowSize: size))
+        XCTAssertFalse(PetWindowConfig.isInResizeGrip(pointInWindow: CGPoint(x: 315, y: 175), windowSize: size))
+    }
+
+    func testResizedFrameAnchorsTopLeftAndGrowsWithDrag() {
+        let start = CGRect(x: 100, y: 200, width: 320, height: 180)
+        // 拖右 +40（變寬）、拖下 -30（螢幕向下，dy<0 → 變高）。
+        let out = PetWindowConfig.resizedFrame(startFrame: start, dx: 40, dy: -30)
+        XCTAssertEqual(out.width, 360, accuracy: 1e-9)
+        XCTAssertEqual(out.height, 210, accuracy: 1e-9)
+        // 左上角（AppKit：origin.x 與 origin.y+height）不動。
+        XCTAssertEqual(out.origin.x, 100, accuracy: 1e-9)
+        XCTAssertEqual(out.origin.y + out.height, start.origin.y + start.height, accuracy: 1e-9)
+    }
+
+    func testResizedFrameClampsToMinSizeKeepingTopLeft() {
+        let start = CGRect(x: 100, y: 200, width: 320, height: 180)
+        // 往內縮超過下限：長寬都夾到 minSize，上緣仍不動。
+        let out = PetWindowConfig.resizedFrame(startFrame: start, dx: -1000, dy: 1000)
+        XCTAssertEqual(out.width, PetWindowConfig.minSize.width, accuracy: 1e-9)
+        XCTAssertEqual(out.height, PetWindowConfig.minSize.height, accuracy: 1e-9)
+        XCTAssertEqual(out.origin.x, 100, accuracy: 1e-9)
+        XCTAssertEqual(out.origin.y + out.height, start.origin.y + start.height, accuracy: 1e-9)
+    }
+
     #if canImport(AppKit)
     func testWindowFlagsMatchArchitectureSpec() {
         XCTAssertEqual(PetWindowConfig.Flags.styleMask, [.borderless])
