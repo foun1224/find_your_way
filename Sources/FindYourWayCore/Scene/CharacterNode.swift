@@ -319,6 +319,7 @@ public final class CharacterNode: SKSpriteNode {
         fadeIn.timingMode = .easeOut
         let hold = SKAction.wait(forDuration: 0.25)
         let fadeOut = SKAction.fadeOut(withDuration: 0.6)
+        fadeOut.timingMode = .easeIn
         let remove = SKAction.removeFromParent()
         glow.run(SKAction.sequence([fadeIn, hold, fadeOut, remove]))
     }

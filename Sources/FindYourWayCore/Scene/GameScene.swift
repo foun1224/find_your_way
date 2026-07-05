@@ -89,6 +89,11 @@ public final class GameScene: SKScene {
 
     private static let heroRestScheduleKey = "heroRestSchedule"
 
+    /// `catchUpDisplayedDistance` 的世界捲動補間 `SKAction` 的 key（Fable 雙鏡審查修正）：
+    /// 帶 key 才能在重疊觸發時安全 retarget（先 `removeAction(forKey:)` 再重新 `run`），
+    /// 避免兩個補間同時寫 `displayedDistance` 互相打架。
+    private static let catchUpScrollKey = "catchUpScroll"
+
     /// 主角是否正在「偶爾看你」休息中：休息期間**只凍結世界視覺捲動（`displayedDistance`）**，
     /// 絕不能凍結 `GameState.distance` 的推進（不變式，見 `performTick`）。
     /// P1c 陪你歇（`isAwayResting`）也會把這個旗標設為 `true`——兩者共用同一條世界凍結機制，
@@ -119,6 +124,15 @@ public final class GameScene: SKScene {
     /// `ProximityAwareness.shouldAcknowledge` 做邊緣觸發判斷）。由 `ClickThroughController` 驅動。
     private var wasCursorNear = false
     private var lastProximityAcknowledgeTime: Double = -.infinity
+
+    // MARK: - P2 深夜陪伴（`docs/22_COMPANIONSHIP_DESIGN.md` §5b Stage P2）：
+    // 只吃「真實時刻換算出的當日秒數」這一種良性訊號（`localSecondsIntoDay`，與晝夜 tint 同一份
+    // 真實時鐘），純判斷邏輯在 `LateNightPresence`（可測）。深夜/破曉各自獨立冷卻，避免同時觸發。
+
+    /// 上一次播放「深夜陪伴」句的真實時刻，供 `LateNightPresence.canTrigger` 做長冷卻節流。
+    private var lastLateNightPresenceTime: Double = -.infinity
+    /// 上一次播放「破曉」句的真實時刻，供 `LateNightPresence.canTrigger` 做長冷卻節流（罕見）。
+    private var lastDawnPresenceTime: Double = -.infinity
 
     private let rules: SimulationRules
     private let timeProvider: TimeProvider
@@ -603,6 +617,12 @@ public final class GameScene: SKScene {
         }
     }
 
+    /// 旅程日誌 toast 錯開間隔（Fable 雙鏡審查修正）：單則 toast 總長 = fadeIn 0.4 + hold 2.5 +
+    /// fadeOut 0.6 = 3.5s；若用舊值 3.0s 錯開，下一則 fadeIn 開始時上一則還沒 fadeOut 完，
+    /// 同螢幕座標疊字 0.5s。改成 3.6s（略大於 3.5s 總長）確保「下一則 fadeIn 前上一則已完全
+    /// fadeOut」，不再疊字。所有排程 toast 的地方都共用這個常數，避免各處各自寫死不同值。
+    private static let toastStaggerInterval: TimeInterval = 3.6
+
     /// 低頻模擬推進：套 `SimulationRules`（與離線結算同一套），
     /// 用真實時鐘差 `dt` 而非固定值，降頻不失真（`08` §3.3）。
     private func performTick(dt: Double) {
@@ -630,15 +650,15 @@ public final class GameScene: SKScene {
         var toastDelay: TimeInterval = 0
         if Self.companionEnabled, companionJustJoined {
             presentCompanionMeetPeak()
-            toastDelay += 3.0
+            toastDelay += Self.toastStaggerInterval
         }
         for event in crossedEvents where event.id != Companion.meetEvent.id {
             scheduleJourneyLog(text: event.logText, after: toastDelay)
-            toastDelay += 3.0
+            toastDelay += Self.toastStaggerInterval
         }
         for chapter in crossedChapters {
             scheduleJourneyLog(text: chapterTransitionText(chapter), after: toastDelay)
-            toastDelay += 3.0
+            toastDelay += Self.toastStaggerInterval
         }
 
         // 相遇卡（Stage A，`16` §2.3）：疊加的無盡氛圍層，與上面的 story beats 並存、不搶戲。
@@ -646,9 +666,71 @@ public final class GameScene: SKScene {
         if motionEnabled {
             for card in Self.encounterCards(crossedFrom: oldDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined) {
                 scheduleJourneyLog(text: card.logText, after: toastDelay)
-                toastDelay += 3.0
+                toastDelay += Self.toastStaggerInterval
             }
         }
+
+        // 關係性時刻（Stage P2，`22` §5b）：沿累積里程稀疏、確定性冒一句「我們」關係語氣日誌，
+        // 與相遇卡並存但邏輯獨立（相遇卡寫景，這裡寫關係）。同樣不入 `GameState`、不持久化。
+        //
+        // **Fable 裁決（雙鏡審查）：不受 `motionEnabled` 關閉。** 這是純情感核心（alpha-only
+        // toast，見 `showJourneyLog`——只有 fadeIn/fadeOut，無位移/縮放），WCAG 對 reduce motion
+        // 的要求只在拿掉位移/縮放/閃爍，不含純 alpha 淡入淡出的文字提示；reduce-motion 使用者
+        // 更不該被剝奪「有人陪」的關係語氣。相遇卡（`encounterCards`，上面那段）維持 gated 不變
+        // ——那是氛圍裝飾，非情感核心，區別對待。
+        for line in Self.relationalMilestoneLines(crossedFrom: oldDistance, to: gameState.distance) {
+            scheduleJourneyLog(text: line, after: toastDelay)
+            toastDelay += Self.toastStaggerInterval
+        }
+
+        // 深夜陪伴（Stage P2，`22` §5b）：真實時刻落在深夜/破曉窗口時，依長冷卻極稀疏地冒一句
+        // 純在場日誌 + 極輕看向你；只用真實時刻這個良性訊號，絕不讀取工作內容、絕不勸睡（`22` §6）。
+        toastDelay = presentLateNightPresenceIfNeeded(baseDelay: toastDelay)
+    }
+
+    /// 沿里程軸掃出 `(fromDistance, toDistance]` 之間跨越的關係性時刻槽，依序回傳選中的句子
+    /// （純函式委派 `RelationalMilestones`）。同 `encounterCards` 範式：**不入 `GameState`、
+    /// 不持久化**，每次即時算、不記憶（`22` §5b 紅線）。
+    private static func relationalMilestoneLines(crossedFrom fromDistance: Double, to toDistance: Double) -> [String] {
+        let oldSlot = RelationalMilestones.slotIndex(atDistance: fromDistance)
+        let newSlot = RelationalMilestones.slotIndex(atDistance: toDistance)
+        guard newSlot > oldSlot else { return [] }
+        return (max(oldSlot + 1, 0)...newSlot).map { RelationalMilestones.line(atSlot: $0) }
+    }
+
+    /// Stage P2 深夜陪伴（`22` §5b）：真實時刻換算出的「當日秒數」落在深夜/破曉窗口時，
+    /// 依 `LateNightPresence` 的長冷卻判斷是否可再播一句；兩者互斥（同一次只觸發其中一種）
+    /// 且各自獨立冷卻。純在場、絕不勸睡（`22` §6 不做）。「極輕看向你」重用
+    /// `playProximityAcknowledgement`——它本就不凍結世界捲動（不同於周期性「偶爾看你」），
+    /// 適合純氛圍級的輕觸。支援 `FYW_DEBUG_SECONDS_INTO_DAY` 覆寫，方便 Fable 截圖不必真的
+    /// 等到深夜（同晝夜 tint 範式）。回傳更新後的 toast 錯開延遲。
+    ///
+    /// **Fable 裁決（雙鏡審查）：不受 `motionEnabled` 關閉。** 深夜/破曉句是純情感核心，toast
+    /// 本身 alpha-only；伴隨的「極輕看向你」重用 `playProximityAcknowledgement` →
+    /// `playRestLookAtViewer`，內部只用 `fadeAlpha` 淡入淡出 + 換貼圖，同樣無位移/縮放
+    /// （已確認，見 `CharacterNode.playRestLookAtViewer`），reduce-motion 下播放安全。
+    /// reduce-motion 使用者更該在深夜感到有人陪，故不因 `motionEnabled == false` 關閉。
+    private func presentLateNightPresenceIfNeeded(baseDelay: TimeInterval) -> TimeInterval {
+        let now = timeProvider.now
+        let secondsIntoDay = Self.debugSecondsIntoDayOverride() ?? Self.localSecondsIntoDay(unixSeconds: now)
+        var delay = baseDelay
+
+        if LateNightPresence.isLateNight(secondsIntoDay: secondsIntoDay),
+           LateNightPresence.canTrigger(now: now, lastTriggerTime: lastLateNightPresenceTime, cooldown: LateNightPresence.lateNightCooldownSeconds) {
+            let slot = LateNightPresence.lateNightSlotIndex(atUnixSeconds: now)
+            scheduleJourneyLog(text: LateNightPresence.lateNightLine(atSlot: slot), after: delay)
+            character?.playProximityAcknowledgement()
+            delay += Self.toastStaggerInterval
+            lastLateNightPresenceTime = now
+        } else if LateNightPresence.isDawn(secondsIntoDay: secondsIntoDay),
+                  LateNightPresence.canTrigger(now: now, lastTriggerTime: lastDawnPresenceTime, cooldown: LateNightPresence.dawnCooldownSeconds) {
+            scheduleJourneyLog(text: LateNightPresence.dawnLine, after: delay)
+            character?.playProximityAcknowledgement()
+            delay += Self.toastStaggerInterval
+            lastDawnPresenceTime = now
+        }
+
+        return delay
     }
 
     /// 沿里程軸掃出 `(fromDistance, toDistance]` 之間跨越的相遇卡卡槽，依序回傳選中的卡
@@ -740,7 +822,11 @@ public final class GameScene: SKScene {
         }
         catchUp.timingMode = .easeInEaseOut
         let clearFlag = SKAction.run { [weak self] in self?.isCatchUpActive = false }
-        run(SKAction.sequence([catchUp, clearFlag]))
+        // 防禦（Fable 雙鏡審查修正）：若前一次追趕補間還沒跑完就再次呼叫（例如短暫恢復又
+        // 再次陪你歇），先移除舊的同 key 動作再啟動新的，避免兩個補間同時寫 `displayedDistance`
+        // 互相打架（safe retarget）。
+        removeAction(forKey: Self.catchUpScrollKey)
+        run(SKAction.sequence([catchUp, clearFlag]), withKey: Self.catchUpScrollKey)
     }
 
     // MARK: - P1 在場與歸來（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1）
@@ -987,11 +1073,11 @@ public final class GameScene: SKScene {
         var delay: TimeInterval = 0
         for text in journeyLogTexts(for: outcome) {
             scheduleJourneyLog(text: text, after: delay)
-            delay += 3.0
+            delay += Self.toastStaggerInterval
         }
         for chapter in outcome.newChapters {
             scheduleJourneyLog(text: chapterTransitionText(chapter), after: delay)
-            delay += 3.0
+            delay += Self.toastStaggerInterval
         }
 
         // 離線回歸的相遇卡摘要（`16` §2.3）：挑最後 1–2 張以「路過了…」呈現，不逐一列出、
@@ -1000,8 +1086,19 @@ public final class GameScene: SKScene {
             let crossed = Self.encounterCards(crossedFrom: startDistance, to: gameState.distance, companionMet: Self.companionEnabled && gameState.companionJoined)
             for card in crossed.suffix(2) {
                 scheduleJourneyLog(text: "你不在時，路過了…\(card.logText)", after: delay)
-                delay += 3.0
+                delay += Self.toastStaggerInterval
             }
+        }
+
+        // 離線回歸的關係性時刻摘要（`22` §5b「離線回歸摘要皆比照相遇卡」）：關係性時刻比相遇卡
+        // 更稀疏，跨越的槽數通常 0~1，挑最後一句以關係語氣呈現即可，不逐一列出（守低喚醒/零功利）。
+        //
+        // **Fable 裁決：不受 `motionEnabled` 關閉**（同上方 `relationalMilestoneLines` 的裁決理由
+        // ——alpha-only 情感核心，reduce-motion 使用者更該感到有人陪；相遇卡摘要維持 gated）。
+        let relationalCrossed = Self.relationalMilestoneLines(crossedFrom: startDistance, to: gameState.distance)
+        if let last = relationalCrossed.last {
+            scheduleJourneyLog(text: last, after: delay)
+            delay += Self.toastStaggerInterval
         }
 
         if Self.companionEnabled, outcome.companionJustJoined {
@@ -1048,8 +1145,10 @@ public final class GameScene: SKScene {
         addChild(label)
 
         let fadeIn = SKAction.fadeIn(withDuration: 0.4)
+        fadeIn.timingMode = .easeOut
         let hold = SKAction.wait(forDuration: 2.5)
         let fadeOut = SKAction.fadeOut(withDuration: 0.6)
+        fadeOut.timingMode = .easeIn
         let remove = SKAction.removeFromParent()
         label.run(SKAction.sequence([fadeIn, hold, fadeOut, remove]))
     }
@@ -1113,6 +1212,7 @@ public final class GameScene: SKScene {
         glowFadeIn.timingMode = .easeOut
         let glowLinger = SKAction.wait(forDuration: 1.2)
         let glowFadeOut = SKAction.fadeOut(withDuration: 2.0)
+        glowFadeOut.timingMode = .easeIn
         let glowRemove = SKAction.removeFromParent()
         glow.run(SKAction.sequence([glowFadeIn, glowLinger, glowFadeOut, glowRemove]))
     }
