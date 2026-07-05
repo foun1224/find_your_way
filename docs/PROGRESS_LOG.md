@@ -20,8 +20,11 @@
 
 **技術注記**：future_city 美術調色盤本身含洋紅粉紫霓虹，靠 `chroma_key_flood_color` 從邊緣 flood-fill 只去背景相連洋紅、不吃內部霓虹（threshold=60 保留）；逐張黑白合成目視確認招牌無破洞。
 
-- 測試 **329/329 綠**。
-**待使用者**：15 地域 GUI 實走體感；future_city 喚醒度最高，若實際打擾可加 always-night/降 bloom/降飽和專屬處理（已留備註）；mountain_palace 仙俠味若覺出戲可拉掉。舊格式殘留地域（若有）續汰換。
+**體檢＋淘汰（使用者走一輪 montage 後）**：15 地域逐張全解析度雙鏡複檢 → 淘汰 **village_2**（天空太空/中前景稀疏）、**valley**（灰褪色/低對比）兩張舊格式弱圖。移除 enum/cycle/assetFolder/debugOverride/scatter slots/測試（保留 design png 與素材夾、slice_assets.py 留置）。其餘 5 舊格式（grassland/kingdom/village3/skyVillage/skyCity）品質站得住續留。**→ 13 地域循環**：`meadowOrigin→kingdom→village3→hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→skyVillage→mountainPalace→magicCity→holyCity→skyCity`。
+
+- 測試 **328/328 綠**。
+**已知系統性小瑕（全域，待修）**：遠景天空上緣 `patch_label_box` 標籤補丁痕（重複單列 → 淡直紋/方塊，village_3 左上最明顯）。根治方向：改補丁法用鄰近天空漸層填而非重複單列，一次全地域受益。
+**待使用者**：13 地域 GUI 實走體感；future_city 喚醒度最高，若實際打擾可加 always-night/降 bloom/降飽和專屬處理（已留備註）；mountain_palace 仙俠味若覺出戲可拉掉；village3/kingdom 順序若想 village3 在前可重排。
 
 ---
 
