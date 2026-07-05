@@ -208,6 +208,72 @@ public final class CharacterNode: SKSpriteNode {
         action(forKey: Self.restKey) != nil
     }
 
+    // MARK: - P1c 陪你歇（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1c）
+    //
+    // 與「偶爾看你」（`playRestLookAtViewer`）用同一套「轉為面向觀看者」視覺語言（同樣只用
+    // alpha 淡入淡出過場，reduce-motion 安全），差別是：這裡沒有內建的固定持續時間——
+    // 「陪你歇」要一直保持到 `GameScene` 判定使用者活動恢復（`PresenceSchedule.shouldRestTogether`
+    // 由 `true` 轉 `false`）才呼叫 `endAwayRestPose()` 起身，可能長達數分鐘甚至更久。
+    // 呼吸（`breathingKey` scale action）完全不受影響、持續疊加——這正是「有生命的休息姿態，
+    // 不是凍結的走路幀」的來源（`22` §4 P1c 要求）。
+
+    /// 進入「陪你歇」：淡出走路循環、轉為面向觀看者的姿態並停留（不會自己結束，
+    /// 需呼叫 `endAwayRestPose()`）。找不到 `front_` 幀時優雅降級為「什麼都不做」——
+    /// `GameScene` 仍會照常凍結世界捲動（不變式本身不依賴這裡有沒有視覺表現）。
+    public func playAwayRestPose() {
+        guard action(forKey: Self.restKey) == nil else { return }
+        guard let frontTexture = frontTextures.first, !rightTextures.isEmpty else { return }
+
+        removeAction(forKey: "walkCycle")
+
+        let half = HeroRestSchedule.transitionDurationSeconds / 2
+        let dimOut = SKAction.fadeAlpha(to: Self.restTransitionDimAlpha, duration: half)
+        dimOut.timingMode = .easeInEaseOut
+        let toFront = SKAction.run { [weak self] in self?.texture = frontTexture }
+        let brightenToFront = SKAction.fadeAlpha(to: 1.0, duration: half)
+        brightenToFront.timingMode = .easeInEaseOut
+        run(SKAction.sequence([dimOut, toFront, brightenToFront]), withKey: Self.restKey)
+    }
+
+    /// 結束「陪你歇」：淡回走路 frame、恢復走路循環。與 `playAwayRestPose` 對稱，
+    /// 同樣只用 alpha 過場（無位移/縮放）。
+    public func endAwayRestPose() {
+        removeAction(forKey: Self.restKey)
+        guard !rightTextures.isEmpty else { return }
+
+        let half = HeroRestSchedule.transitionDurationSeconds / 2
+        let dimOutBack = SKAction.fadeAlpha(to: Self.restTransitionDimAlpha, duration: half)
+        dimOutBack.timingMode = .easeInEaseOut
+        let toRight = SKAction.run { [weak self] in self?.texture = self?.rightTextures.first }
+        let brightenBack = SKAction.fadeAlpha(to: 1.0, duration: half)
+        brightenBack.timingMode = .easeInEaseOut
+        let resumeWalk = SKAction.run { [weak self] in
+            guard let self else { return }
+            self.runWalkAnimation(textures: self.rightTextures)
+        }
+        run(SKAction.sequence([dimOutBack, toRight, brightenBack, resumeWalk]), withKey: Self.restKey)
+    }
+
+    /// 睡眠／長時間離線恢復（`GameScene.resumeWithCatchUp`）的安全網：若角色仍卡在任何
+    /// 「看你／陪你歇」姿態中（極罕見——例如恰好在陪你歇期間系統進入睡眠），立即reset回
+    /// 正常走路，不做過場（這個情境的補間本就無意義，`resumeWithCatchUp` 對 `displayedDistance`
+    /// 也是直接對齊、不補間，這裡呼應同一種「長時間中斷後直接歸零複雜狀態」原則）。
+    public func forceResumeWalkingIfNeeded() {
+        guard action(forKey: Self.restKey) != nil else { return }
+        removeAction(forKey: Self.restKey)
+        alpha = 1.0
+        guard !rightTextures.isEmpty else { return }
+        texture = rightTextures.first
+        runWalkAnimation(textures: rightTextures)
+    }
+
+    /// P1a 歸來的溫暖：若使用者回來時旅人已經在「陪你歇」姿態中面向著你，恢復本身
+    /// （起身走路）就是最自然的歡迎——這裡只補一點極輕暖光，不重播轉身（避免重疊/多餘）。
+    /// 重用既有 `playWarmGlow`（純 alpha，reduce-motion 安全）。
+    public func playReturnWarmGlow() {
+        playWarmGlow()
+    }
+
     /// 點角色 → 暖心回應（Phase 4d，`12` §5 / ADR-006 嚴格零功利）：一次溫和、慢、無 jolt 的
     /// 「注意到你了」小動作（輕輕一跳 + 放大再收）+ 一圈極淡暖光，數幀內就散。
     ///

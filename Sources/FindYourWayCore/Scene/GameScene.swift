@@ -91,7 +91,27 @@ public final class GameScene: SKScene {
 
     /// 主角是否正在「偶爾看你」休息中：休息期間**只凍結世界視覺捲動（`displayedDistance`）**，
     /// 絕不能凍結 `GameState.distance` 的推進（不變式，見 `performTick`）。
+    /// P1c 陪你歇（`isAwayResting`）也會把這個旗標設為 `true`——兩者共用同一條世界凍結機制，
+    /// 差別只在「誰觸發、要不要自己結束」。
     private var isCharacterResting = false
+
+    // MARK: - P1 在場與歸來（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1）：
+    // P1a 歸來的溫暖 + P1c 陪你歇。只吃「OS 閒置秒數」（無內容）與螢幕喚醒/解鎖這兩種良性訊號
+    // （由執行檔層 `AppDelegate` 輪詢 `CGEventSource`／監聽 `NSWorkspace` 通知後呼叫下面的
+    // `notifyIdleSeconds`/`notifyScreenWake`），純判斷邏輯在 `PresenceSchedule`（可測）。
+
+    /// `true` 代表旅人目前正因為「使用者離開夠久」坐下陪你歇（P1c）：與周期性「偶爾看你」
+    /// 共用 `isCharacterResting` 世界凍結旗標，但**不會自己結束**——只有
+    /// `notifyIdleSeconds` 偵測到活動恢復（`PresenceSchedule.shouldRestTogether` 轉為 `false`）
+    /// 才會呼叫 `endAwayRest()` 起身。
+    private var isAwayResting = false
+
+    /// 上一次 `notifyIdleSeconds` 量到的閒置秒數，供 `PresenceSchedule.isReturnTransition`
+    /// 做邊緣觸發判斷（見該方法說明：閒置秒數變小＝剛剛發生了一次輸入）。
+    private var lastIdleSeconds: Double = 0
+
+    /// 上一次播放「歡迎回來」反應的時間，供 `PresenceSchedule.canTriggerReturnWelcome` 節流。
+    private var lastReturnWelcomeTime: Double = -.infinity
 
     // MARK: - 靠近 / 游標回應性（`13_PSYCH_AUDIT.md` P2 / `02` §4，ADR-006 嚴格零功利）
 
@@ -553,9 +573,13 @@ public final class GameScene: SKScene {
     public func resumeWithCatchUp() {
         let (newState, outcome) = OfflineProgress.settle(gameState, now: timeProvider.now, rules: rules)
         gameState = newState
-        // 若恰好在「偶爾看你」休息期間閒置/睡眠，恢復時直接解除凍結、跳過補間直接對齊
-        // （長時間睡眠後的補間不具意義），避免卡在「永遠不會結束的休息」。
+        // 若恰好在「偶爾看你」/P1c「陪你歇」休息期間閒置/睡眠，恢復時直接解除凍結、跳過補間
+        // 直接對齊（長時間睡眠後的補間不具意義），避免卡在「永遠不會結束的休息」。
         isCharacterResting = false
+        isAwayResting = false
+        // 安全網：把角色視覺也一併重置回正常走路（若睡眠恰好發生在看你/陪你歇姿態中），
+        // 不做過場——理由同上，長時間中斷後不補間，直接歸零複雜狀態。
+        character?.forceResumeWalkingIfNeeded()
         // 安全網：若恰好有一段捲動補間 `SKAction` 正在跑（離線回歸/看你結束追趕，極罕見——
         // 這兩段補間都只有數秒或不到一秒），閒置/睡眠恢復要直接對齊、解除旗標，讓每幀推進
         // 從這個新基準點接手，不留著半途而廢的補間跟它打架。不用 `removeAllActions()`，
@@ -563,6 +587,11 @@ public final class GameScene: SKScene {
         isCatchUpActive = false
         displayedDistance = gameState.distance
         applyWorldScroll(distance: displayedDistance)
+        // 若陪你歇期間移除過周期性排程（`startAwayRest`），這裡確保重新排上；
+        // 平常（非陪你歇中斷）排程本來就還在跑，這個檢查是 no-op。
+        if action(forKey: Self.heroRestScheduleKey) == nil {
+            scheduleNextHeroRest()
+        }
 
         // 重設 tick 基準，避免恢復後第一個 update 的大 dt 尖峰再補一次。
         lastUpdateTime = nil
@@ -670,7 +699,16 @@ public final class GameScene: SKScene {
 
     /// 「看你」結束：解除凍結、把 `displayedDistance` 平滑追趕回真實的 `gameState.distance`
     /// （休息期間 `gameState.distance` 一直照常推進，只是沒有反映到畫面上），再排程下一次。
+    ///
+    /// 極罕見的邊界情況：若周期性「偶爾看你」恰好在 P1c「陪你歇」開始後才播完（`startAwayRest`
+    /// 移除的是**下一次**排程，不會打斷正在播放中的這一次），這裡不能真的起身走路——
+    /// 使用者仍不在，改為直接接手進入陪你歇姿態，不解除世界凍結、不排下一次周期性看你
+    /// （不變式：`gameState.distance` 本身從不受影響，這裡只是視覺/排程層的銜接）。
     private func endHeroRest() {
+        guard !isAwayResting else {
+            character?.playAwayRestPose()
+            return
+        }
         isCharacterResting = false
         catchUpDisplayedDistance()
         scheduleNextHeroRest()
@@ -703,6 +741,94 @@ public final class GameScene: SKScene {
         catchUp.timingMode = .easeInEaseOut
         let clearFlag = SKAction.run { [weak self] in self?.isCatchUpActive = false }
         run(SKAction.sequence([catchUp, clearFlag]))
+    }
+
+    // MARK: - P1 在場與歸來（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1）
+
+    /// 由執行檔層（`AppDelegate`）輪詢 OS 閒置秒數後每次呼叫（純系統閒置秒數，**無任何內容**，
+    /// 見 `CGEventSource.secondsSinceLastEventType`）。純判斷邏輯全在 `PresenceSchedule`
+    /// （可測），本方法只負責串接 runtime 狀態（上一次量到的秒數、上次歡迎的時間、
+    /// 目前是否已在陪你歇）——與 `notifyCursorNearState` 同一種薄殼模式。
+    public func notifyIdleSeconds(_ idleSeconds: Double) {
+        let now = timeProvider.now
+
+        // P1a：先判斷「歸來」，此時 `isAwayResting` 若仍為 true，代表旅人此刻正面向你坐著
+        // （陪你歇姿態）——恢復走路本身就是最自然的歡迎，這裡只加暖光，不重播轉身。
+        if PresenceSchedule.isReturnTransition(previousIdleSeconds: lastIdleSeconds, currentIdleSeconds: idleSeconds),
+           PresenceSchedule.canTriggerReturnWelcome(now: now, lastTriggerTime: lastReturnWelcomeTime) {
+            triggerReturnWelcome()
+            lastReturnWelcomeTime = now
+        }
+
+        // P1c：邊緣觸發進入/退出陪你歇（`shouldRestTogether` 本身不記憶狀態，這裡用
+        // `isAwayResting` 記上一輪結果做邊緣觸發，避免每次輪詢都重複呼叫 start/end）。
+        let shouldRest = PresenceSchedule.shouldRestTogether(idleSeconds: idleSeconds)
+        if shouldRest, !isAwayResting {
+            startAwayRest()
+        } else if !shouldRest, isAwayResting {
+            endAwayRest()
+        }
+
+        lastIdleSeconds = idleSeconds
+    }
+
+    /// 螢幕喚醒/解鎖（P1a 訊號 a，由 `AppDelegate` 監聽 `NSWorkspace` 通知後呼叫）：
+    /// 不論閒置秒數輪詢的取樣時機為何，直接觸發一次「歸來的溫暖」（仍受冷卻節流，
+    /// 避免與閒置偵測路徑幾乎同時觸發造成重複反應）。呼叫端應在 `resumeWithCatchUp()`
+    /// **之前**呼叫本方法，這樣若旅人當時正在陪你歇姿態中，還能享受到「恢復本身即歡迎」
+    /// 那個更自然的分支（`resumeWithCatchUp` 會把 `isAwayResting` 重置回 `false`）。
+    public func notifyScreenWake() {
+        let now = timeProvider.now
+        guard PresenceSchedule.canTriggerReturnWelcome(now: now, lastTriggerTime: lastReturnWelcomeTime) else { return }
+        triggerReturnWelcome()
+        lastReturnWelcomeTime = now
+    }
+
+    /// P1a 歡迎回來的微反應：低顯著、一次性、絕不出聲/彈窗（`22` §3 非侵入憲章）。
+    /// 若旅人正陪你歇（面向你坐著），恢復走路的動作本身已是歡迎，只補暖光；否則重用既有
+    /// 「偶爾看你」機制（`playRestLookAtViewer`，純 alpha 過場、reduce-motion 安全）短短看你
+    /// 一下 + 極輕暖光，時間到了自然接回世界捲動追趕（與周期性看你完全同一套收尾邏輯）。
+    private func triggerReturnWelcome() {
+        guard let character else { return }
+
+        if isAwayResting {
+            character.playReturnWarmGlow()
+            return
+        }
+
+        guard !isCharacterResting else { return }
+        isCharacterResting = true
+        character.playRestLookAtViewer(
+            duration: HeroRestSchedule.minRestDurationSeconds,
+            transitionDuration: HeroRestSchedule.transitionDurationSeconds
+        ) { [weak self] in
+            guard let self, !self.isAwayResting else { return }
+            self.isCharacterResting = false
+            self.catchUpDisplayedDistance()
+        }
+        character.playReturnWarmGlow()
+    }
+
+    /// P1c 進入陪你歇：暫停周期性「偶爾看你」排程（陪你歇期間由這裡全權接手看向你的姿態，
+    /// 避免兩套排程互相打架）、凍結世界視覺捲動、讓角色坐下歇著（有生命的姿態——呼吸持續，
+    /// 不是凍結的走路幀）。**絕不凍結 `gameState.distance`**（不變式，沿用 `isCharacterResting`
+    /// 同一套凍結機制，見 `advanceDisplayedDistance`/`performTick`）。
+    private func startAwayRest() {
+        isAwayResting = true
+        isCharacterResting = true
+        removeAction(forKey: Self.heroRestScheduleKey)
+        character?.playAwayRestPose()
+    }
+
+    /// P1c 結束陪你歇（使用者活動恢復）：起身恢復走路、把 `displayedDistance` 平滑追趕回真實
+    /// 里程（陪你歇期間 `gameState.distance` 一直照常推進，只是沒有反映到畫面上——與周期性
+    /// 「偶爾看你」結束時完全同一套追趕邏輯），並重新排上周期性看你排程。
+    private func endAwayRest() {
+        isAwayResting = false
+        isCharacterResting = false
+        character?.endAwayRestPose()
+        catchUpDisplayedDistance()
+        scheduleNextHeroRest()
     }
 
     /// 依 `WorldScroll` 把里程換算成各景物層的 wrap 捲動位置與地標螢幕位置，並依

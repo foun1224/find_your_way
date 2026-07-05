@@ -25,6 +25,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `08` §7 P7 provisional：存檔節流每 ~2 分鐘 + 關鍵時機（離線結算後 / terminate / sleep）。
     private let saveThrottleInterval: Double = 120
 
+    /// P1 在場與歸來（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1）：輪詢 OS 閒置秒數的計時器。
+    /// **只讀「閒置了多少秒」這個系統層級的數字，無任何內容**（`CGEventSource`，隱私鐵律）。
+    private var idlePollTimer: Timer?
+
+    /// 輪詢間隔（秒）：陪你歇門檻是 180 秒、歸來門檻是 60 秒，這裡用遠小於兩者的間隔取樣，
+    /// 讓兩個判斷的邊緣觸發（`PresenceSchedule`）夠即時，同時不至於太密集浪費資源。
+    private static let idlePollInterval: TimeInterval = 5.0
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let screen = NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
@@ -90,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpPowerObservers()
         setUpScreenParameterObserver()
         setUpMotionPreferenceObservers()
+        setUpIdlePolling()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -157,6 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleDidWake() {
+        // P1a 歸來的溫暖（訊號 a：螢幕喚醒/解鎖）：在 `resumeWithCatchUp` **之前**呼叫，
+        // 這樣若旅人恰好在陪你歇姿態中睡眠，還能走「恢復本身即歡迎」那個更自然的分支
+        // （見 `GameScene.notifyScreenWake` 說明）。
+        gameScene?.notifyScreenWake()
         // 睡眠喚醒走與離線啟動相同的 capped 補算（`08` §3.5，避免無上限尖峰補算）。
         gameScene?.resumeWithCatchUp()
     }
@@ -169,6 +182,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleScreensDidWake() {
+        // P1a：理由同 `handleDidWake`（螢幕睡眠/喚醒也是「使用者離開又回來」的訊號 a）。
+        gameScene?.notifyScreenWake()
         gameScene?.resumeWithCatchUp()
     }
 
@@ -273,5 +288,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let userOverride = preferencesStore.load().reduceMotionOverride
         let reduceMotion = MotionSettings.effectiveReduceMotion(userOverride: userOverride, systemPref: systemPref)
         gameScene?.motionEnabled = !reduceMotion
+    }
+
+    // MARK: - P1 在場與歸來（`docs/22_COMPANIONSHIP_DESIGN.md` §4 Stage P1）：
+    // 輪詢 OS 閒置秒數，驅動 P1a 歸來的溫暖 + P1c 陪你歇（純判斷邏輯在
+    // `PresenceSchedule`/`GameScene.notifyIdleSeconds`，這裡只是「量測」的薄殼）。
+    //
+    // **隱私鐵律**：只用 `CGEventSource.secondsSinceLastEventType` 讀「距上次任何輸入事件
+    // 過了幾秒」這一個系統層級的數字——不讀視窗標題、不讀 app 名稱、不讀鍵盤內容、
+    // 不知道使用者在做什麼，只知道「有沒有在動」。不引入任何 Accessibility/螢幕內容權限。
+
+    private func setUpIdlePolling() {
+        let timer = Timer.scheduledTimer(withTimeInterval: Self.idlePollInterval, repeats: true) { [weak self] _ in
+            self?.pollIdleSeconds()
+        }
+        timer.tolerance = Self.idlePollInterval * 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        idlePollTimer = timer
+        pollIdleSeconds() // 啟動時先量一次，建立 `lastIdleSeconds` 基準，避免第一次輪詢誤判邊緣觸發。
+    }
+
+    private func pollIdleSeconds() {
+        let idleSeconds = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
+        gameScene?.notifyIdleSeconds(idleSeconds)
     }
 }
