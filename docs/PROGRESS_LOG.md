@@ -28,8 +28,20 @@
 
 **「浮起來」根因 + 舊格式地域移除**：使用者實走發現角色浮空。根因＝舊格式單-backdrop 地域（meadowOrigin/kingdom/village3/skyVillage/skyCity）只渲染 far 一層、far 自畫前景地平線落在薄 40px 地面條上方（layered 有 mid/fore 蓋住就沒事）。使用者決定「舊的先移除、用新的」→ cycle 移除該 5 個、**enum case 保留**（休眠模式，meadowOrigin 仍當 fallback 預設，槽位/override 原樣留），待重生 layered 版加回。**→ 8 地域全 layered 循環**：`hotspringVillage→harbor→snowMountain→steampunkCity→futureCity→mountainPalace→magicCity→holyCity`。實機 harbor 驗收角色穩踩碼頭無浮空。
 
-- 測試 **328/328 綠**。
-**待使用者**：① 重生 5 個舊地域為 layered 格式（磁紅 mid/fore + far 壓低地平線）加回 cycle；② 8 地域 GUI 實走體感；③ CharacterNode idle 接線（4 待機幀已切好待用）；④ future_city 喚醒度最高、mountain_palace 仙俠味去留（已留備註）。
+**★ 5 舊地域全數重生 layered（浮空根治完成）**：使用者逐張用新提示詞重生 5 個舊格式地域，我逐張下載驗證 + 委派 Sonnet 照 holy_city 模板整合（repoint 現有 enum case 到新資源夾 + 加 layeredRegions + 排回 cycle + 道具槽位 + 測試）+ 親自雙鏡截圖驗收：
+- meadowOrigin → `meadow_village`（歐系農村，開場）
+- village3 → `tree_village`（森林樹屋村）
+- kingdom → `kingdom_city`（白藍城堡首都）
+- skyVillage → `sky_village_v2`（浮空平台村，天界入口）
+- skyCity → `sky_city_v2`（白金浮空城，終站）
+舊 enum case 全部沿用（不刪不改名，只 repoint assetFolder + 排回 cycle），舊資源夾/舊 slice 碼保留休眠。
+
+**★ 最終 13 地域循環（全 layered、全部踩實無浮空）**：
+`meadowOrigin → village3 → kingdom → hotspringVillage → harbor → snowMountain → steampunkCity → futureCity → skyVillage → mountainPalace → magicCity → holyCity → skyCity`
+情感弧：近人開場（農村→樹屋村→城堡首都）→ 旅途（溫泉→海港→雪山→蒸氣/賽博雙城）→ 飄浮天界（浮空村→仙宮→魔法城→聖光城→天空城終站）。
+
+- 測試 **338/338 綠**。實機逐張截圖驗收 13 地域角色皆踩實地面、無浮空、無洋紅殘留。
+**待使用者**：① 13 地域 GUI 實走整體體感；② CharacterNode idle 接線（4 待機幀已切好待用）；③ future_city 喚醒度最高、mountain_palace 仙俠味去留（已留備註）；④ 陪伴 P1–P4 live 校準。
 
 ---
 
