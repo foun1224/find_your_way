@@ -996,6 +996,60 @@ def patch_label_box_horizontal(img: Image, rect: "Region") -> Image:
     return out
 
 
+def patch_label_box_sky(img: Image, rect: "Region") -> Image:
+    """遠景（far）天空 backdrop 層專用的標籤方框補丁——取代 `patch_label_box` 的「單一列
+    往下重複」。單列重複在天空層會留下一塊平頂色塊 / 一條淡直紋（village_3 左上最明顯，
+    grassland/kingdom/sky 系列為淡直紋），因為它只複製「方框上/下緣一列」的顏色、無法跟隨
+    天空的垂直漸層與水平雲色變化。
+
+    做法：對方框內每個像素，取「上/下/左/右」四個方向、方框「外緣」最近的真實像素當來源，
+    用**反距離加權**（1/軸向距離）混合。等於用方框四周的真實天空把這塊洞平滑內插補回來
+    （inpainting-lite）：垂直漸層由上下鄰邊帶入、水平雲色由左右鄰邊帶入，離哪邊近就更像那邊，
+    不會出現死板色塊或直紋。方框貼邊（如 far 標籤 y=0 貼頂、x=0 貼左）時該方向無來源，
+    自動只用另外兩到三邊，效果一樣自然。
+
+    **僅用於不透明 far backdrop 層**：絕不用於 mid/fore 洋紅去背層——把洋紅(255,0,255)與相鄰
+    內容內插會混出中間色，chroma-key 抓不到而留下彩色殘留。mid/fore 的標籤方框在去背後本來
+    就變透明、看不見，維持用 `patch_label_box` 即可。
+    """
+    out = Image(img.width, img.height, [row[:] for row in img.pixels])
+    x0, y0 = max(0, rect.x), max(0, rect.y)
+    x1, y1 = min(img.width, rect.x + rect.w), min(img.height, rect.y + rect.h)
+    if x1 <= x0 or y1 <= y0:
+        return out
+    top_y = y0 - 1 if y0 - 1 >= 0 else None       # 上緣外一列
+    bot_y = y1 if y1 < img.height else None         # 下緣外一列
+    left_x = x0 - 1 if x0 - 1 >= 0 else None        # 左緣外一欄
+    right_x = x1 if x1 < img.width else None         # 右緣外一欄
+
+    def _norm(px):
+        return px if len(px) == 4 else (px[0], px[1], px[2], 255)
+
+    for yy in range(y0, y1):
+        for xx in range(x0, x1):
+            acc = [0.0, 0.0, 0.0, 0.0]
+            wsum = 0.0
+            # 四個軸向鄰邊，權重 = 1/軸向距離（離得近的真實邊界影響更大）
+            neighbors = []
+            if top_y is not None:
+                neighbors.append((img.pixels[top_y][xx], yy - top_y))
+            if bot_y is not None:
+                neighbors.append((img.pixels[bot_y][xx], bot_y - yy))
+            if left_x is not None:
+                neighbors.append((img.pixels[yy][left_x], xx - left_x))
+            if right_x is not None:
+                neighbors.append((img.pixels[yy][right_x], right_x - xx))
+            for px, dist in neighbors:
+                px = _norm(px)
+                w = 1.0 / max(1, dist)
+                for k in range(4):
+                    acc[k] += w * px[k]
+                wsum += w
+            if wsum > 0:
+                out.pixels[yy][xx] = tuple(int(round(acc[k] / wsum)) for k in range(4))
+    return out
+
+
 def fade_top_edge(img: Image, fade_px: int) -> Image:
     """把 `img` 最上緣 `fade_px` 列做垂直 alpha 漸層淡出（頂端 alpha=0，`fade_px` 列處回到原 alpha）。
     用途：`bg/mid.png` 疊在 `bg/far.png` 之前（`ParallaxBackground` mid/far 有重疊區，
@@ -1428,6 +1482,8 @@ def slice_new_region_bg(sheet: Image) -> dict:
         if label_key is not None and label_key in NEW_REGION_LABEL_BOX_RECTS:
             if label_key == "ground":
                 img = patch_label_box_horizontal(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
+            elif label_key == "far":
+                img = patch_label_box_sky(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
             else:
                 img = patch_label_box(img, NEW_REGION_LABEL_BOX_RECTS[label_key])
         if fade_px:
@@ -1491,7 +1547,7 @@ def slice_harbor_bg(sheet: Image) -> dict:
     far 之前形成真多層視差；ground 不去背，只補頂緣洋紅缺口（`patch_magenta_columns`，見其
     docstring 動機）。回傳 `{layer_name: Image}`。
     """
-    far = patch_label_box(sheet.crop(HARBOR_BG_FAR.x, HARBOR_BG_FAR.y, HARBOR_BG_FAR.w, HARBOR_BG_FAR.h), HARBOR_LABEL_RECT)
+    far = patch_label_box_sky(sheet.crop(HARBOR_BG_FAR.x, HARBOR_BG_FAR.y, HARBOR_BG_FAR.w, HARBOR_BG_FAR.h), HARBOR_LABEL_RECT)
     # 遠景 backdrop 是唯一會被無限橫向平鋪的 layered 底圖（`18`/`20` §8A）：左右緣羽化交融，
     # 讓生成端即使沒有完美對齊也能真無縫 loop、不必鏡射（見 `make_horizontally_seamless` docstring）。
     far = make_horizontally_seamless(far, blend_px=64)
@@ -1597,7 +1653,7 @@ def slice_hotspring_village_bg(sheet: Image) -> dict:
     """溫泉山村背景切圖：手法與 `slice_harbor_bg` 完全一致（far 不去背當 backdrop + 水平無縫
     羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(HOTSPRING_VILLAGE_BG_FAR.x, HOTSPRING_VILLAGE_BG_FAR.y, HOTSPRING_VILLAGE_BG_FAR.w, HOTSPRING_VILLAGE_BG_FAR.h),
         HOTSPRING_VILLAGE_LABEL_RECT,
     )
@@ -1703,7 +1759,7 @@ def slice_mountain_palace_bg(sheet: Image) -> dict:
     """仙俠山宮背景切圖：手法與 `slice_hotspring_village_bg` 完全一致（far 不去背當 backdrop +
     水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(MOUNTAIN_PALACE_BG_FAR.x, MOUNTAIN_PALACE_BG_FAR.y, MOUNTAIN_PALACE_BG_FAR.w, MOUNTAIN_PALACE_BG_FAR.h),
         MOUNTAIN_PALACE_LABEL_RECT,
     )
@@ -1800,7 +1856,7 @@ def slice_snow_mountain_bg(sheet: Image) -> dict:
     """雪山王國背景切圖：手法與 `slice_mountain_palace_bg` 完全一致（far 不去背當 backdrop +
     水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(SNOW_MOUNTAIN_BG_FAR.x, SNOW_MOUNTAIN_BG_FAR.y, SNOW_MOUNTAIN_BG_FAR.w, SNOW_MOUNTAIN_BG_FAR.h),
         SNOW_MOUNTAIN_LABEL_RECT,
     )
@@ -1895,7 +1951,7 @@ def slice_magic_city_bg(sheet: Image) -> dict:
     """浮空魔法之城背景切圖：手法與 `slice_mountain_palace_bg` 完全一致（far 不去背當 backdrop +
     水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(MAGIC_CITY_BG_FAR.x, MAGIC_CITY_BG_FAR.y, MAGIC_CITY_BG_FAR.w, MAGIC_CITY_BG_FAR.h),
         MAGIC_CITY_LABEL_RECT,
     )
@@ -1990,7 +2046,7 @@ def slice_holy_city_bg(sheet: Image) -> dict:
     """聖光之城背景切圖：手法與 `slice_magic_city_bg` 完全一致（far 不去背當 backdrop +
     水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(HOLY_CITY_BG_FAR.x, HOLY_CITY_BG_FAR.y, HOLY_CITY_BG_FAR.w, HOLY_CITY_BG_FAR.h),
         HOLY_CITY_LABEL_RECT,
     )
@@ -2088,7 +2144,7 @@ def slice_steampunk_city_bg(sheet: Image) -> dict:
     backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，
     只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(STEAMPUNK_CITY_BG_FAR.x, STEAMPUNK_CITY_BG_FAR.y, STEAMPUNK_CITY_BG_FAR.w, STEAMPUNK_CITY_BG_FAR.h),
         STEAMPUNK_CITY_LABEL_RECT,
     )
@@ -2190,7 +2246,7 @@ def slice_future_city_bg(sheet: Image) -> dict:
     backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，
     只補頂緣洋紅缺口）。
     """
-    far = patch_label_box(
+    far = patch_label_box_sky(
         sheet.crop(FUTURE_CITY_BG_FAR.x, FUTURE_CITY_BG_FAR.y, FUTURE_CITY_BG_FAR.w, FUTURE_CITY_BG_FAR.h),
         FUTURE_CITY_LABEL_RECT,
     )
@@ -2450,6 +2506,8 @@ def main() -> None:
                 # （同 `slice_grassland_props` 手法，地面平台用水平版 patch）。
                 if label_key == "ground":
                     img = patch_label_box_horizontal(img, KINGDOM_LABEL_BOX_RECTS[label_key])
+                elif label_key == "far":
+                    img = patch_label_box_sky(img, KINGDOM_LABEL_BOX_RECTS[label_key])
                 else:
                     img = patch_label_box(img, KINGDOM_LABEL_BOX_RECTS[label_key])
             if fade_px:
@@ -2546,6 +2604,8 @@ def main() -> None:
                 # 比垂直重複自然，見其 docstring。
                 if label_key == "ground":
                     img = patch_label_box_horizontal(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
+                elif label_key == "far":
+                    img = patch_label_box_sky(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
                 else:
                     img = patch_label_box(img, GRASSLAND_LABEL_BOX_RECTS[label_key])
             if fade_px:
