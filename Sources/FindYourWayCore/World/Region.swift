@@ -4,12 +4,16 @@ import Foundation
 /// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
 /// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
 /// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 13 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
-/// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
-/// 再新增 steampunkCity）：
-/// `grassland → kingdom → village3 → hotspringVillage → harbor →
-/// snowMountain → steampunkCity → futureCity → skyVillage → mountainPalace → magicCity →
-/// holyCity → skyCity`。
+/// **目前上線的序列是 8 地域循環（全部 layered 新格式）**：
+/// `hotspringVillage → harbor → snowMountain → steampunkCity → futureCity →
+/// mountainPalace → magicCity → holyCity`。
+///
+/// **舊格式地域移除（使用者決定，2026-07-05）**：meadowOrigin(grassland)/kingdom/
+/// village3/skyVillage/skyCity 這 5 個舊「單 backdrop」地域會讓角色看起來「浮在半空」
+/// （只渲染 far 一層、far 自己畫的前景地平線落在薄地面條上方；layered 地域有 mid/fore
+/// 蓋住就沒此問題），已從 `cycle` 移除。**enum case 保留**（同 seaCity/riverlands 休眠
+/// 模式，`meadowOrigin` 仍當 `assetFolder` fallback 預設 + debug override 用），待使用者
+/// 用新提示詞把它們重生成 layered 格式後再加回 `cycle` + `layeredRegions`。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -87,7 +91,7 @@ public enum RegionType: Equatable, CaseIterable {
     /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。其餘骨架 case
     /// （riverlands/highlands/coastalReach）保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
+        .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .mountainPalace, .magicCity, .holyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
