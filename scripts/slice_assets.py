@@ -27,6 +27,15 @@ MAIN_ROLE_SHEET = os.path.join(REPO_ROOT, "design", "main_role.png")
 # 8 幀，側視朝右、左右腳明確交替的完整循環；下排「待機(Idle)」本波不用（待機仍讀
 # main_role.png 的「向前」欄，見 `MAIN_ROLE_FRONT_ROWS`）。
 MAIN_ROLE_WALK_SHEET = os.path.join(REPO_ROOT, "design", "main_role_walk.png")
+# v2 走路/待機循環圖（接手任務：更高品質的主角素材表，取代 `main_role_walk.png`）：
+# `design/main_role_walk_v2.png` supersedes `main_role_walk.png` — 上排「走路(Walk)」8 幀
+# （側視朝右，完整左右腳交替循環）、下排「待機(Idle)」4 幀（frame 2 帶呼吸白霧、
+# frame 3 帶飄落樹葉+閃光，皆為細膩待機微互動，`21`/`12_PHASE4_SPEC.md` 4d 範疇）。
+# 背景改為深藏青 `RGB(15,15,20)`（非 `main_role_walk.png` 的深紫），去背需用
+# `chroma_key_flood_color` 指定新背景色。座標由 `--inspect`-style 逐像素亮度掃描校準
+# （見 scratchpad 校準紀錄）；v2 完全取代 v1 走路 8 幀（`right_0..7.png`），並新增
+# 待機 4 幀（`idle_0..3.png`，本波只切圖，動畫接線由後續 session 處理）。
+MAIN_ROLE_WALK_V2_SHEET = os.path.join(REPO_ROOT, "design", "main_role_walk_v2.png")
 RESOURCE_V2_SHEET = os.path.join(REPO_ROOT, "design", "resource_v2.png")
 GRASSLAND_SHEET = os.path.join(REPO_ROOT, "design", "grassland.png")
 # 美術大改版第 2 波（`21_ASSET_OVERHAUL_PLAN.md` §4「其餘地域切圖」）：5 個新地域素材表，
@@ -882,6 +891,120 @@ MAIN_ROLE_WALK_ROW = [
     Region(x=1156, y=186, w=175, h=254),
     Region(x=1332, y=186, w=176, h=254),
 ]
+
+
+# `main_role_walk_v2.png`（1536x1024，深藏青底 `RGB(15,15,20)`）版面：標題「旅行者
+# （側視 朝右）動作表」置中於頂部；「走路(Walk)」列（標籤方框 + 8 幀 + 下方 1~8 標號）；
+# 「待機(Idle)」列（標籤方框 + 4 幀 + 下方 1~4 標號）。座標由逐像素「與背景色歐氏距離」
+# 掃描校準（見 scratchpad 校準紀錄）：
+#   Walk 內容 y 帶 202..438（8 幀 bounding box 皆落在此帶內，上方標籤列 y=114..171、
+#   下方數字標號列 y=459..482，皆已排除）；8 幀 x 範圍（逐欄掃描 + 15px 內縫隙合併）：
+#   [56,207] [253,385] [441,585] [627,751] [811,943] [988,1129] [1164,1302] [1342,1485]。
+#   Idle 內容 y 帶 645..872（上方標籤列 y=558..615、下方標號列 y=893..915，皆已排除）；
+#   4 幀 x 範圍：[77,204] [312,459] [545,698]（含 frame 3 右側的飄葉+閃光裝飾）[766,891]。
+# 每幀外擴 4px 餘裕（避免切到邊緣抗鋸齒），去背 + autocrop 後會收斂到本體 bounding box。
+MAIN_ROLE_WALK_V2_ROW = [
+    Region(x=52, y=198, w=160, h=245),
+    Region(x=249, y=198, w=141, h=245),
+    Region(x=437, y=198, w=153, h=245),
+    Region(x=623, y=198, w=133, h=245),
+    Region(x=807, y=198, w=141, h=245),
+    Region(x=984, y=198, w=150, h=245),
+    Region(x=1160, y=198, w=147, h=245),
+    Region(x=1338, y=198, w=152, h=245),
+]
+MAIN_ROLE_IDLE_V2_ROW = [
+    Region(x=73, y=641, w=136, h=236),
+    Region(x=308, y=641, w=156, h=236),
+    Region(x=541, y=641, w=162, h=236),
+    Region(x=762, y=641, w=134, h=236),
+]
+
+# `main_role_walk_v2.png` 背景色（逐像素取樣畫布角落確認，深藏青，非其餘素材表慣用的
+# 近黑 `#1B1B1B`），`chroma_key_flood_color` 需指定此色才能乾淨去背。
+MAIN_ROLE_WALK_V2_BG_COLOR = (15, 15, 20)
+
+
+def _lowest_opaque_row(img: Image) -> int:
+    """回傳最下面一列「有任何不透明像素」的 row index；全透明則回傳 -1。"""
+    for y in range(img.height - 1, -1, -1):
+        if any(p[3] > 0 for p in img.pixels[y]):
+            return y
+    return -1
+
+
+def _autocrop_left_right_top(img: Image) -> Image:
+    """`autocrop` 的變體：只裁左/右/上緣到 bounding box，**刻意不動下緣**（最後一列原樣
+    保留，即使該列在裁切前不是本體 bounding box 的最下緣）。用於「共享地面基準線」裁切
+    流程（見 `slice_main_role_walk_v2`）：所有 frame 已先被裁到同一條共享基準線收尾，
+    這裡只需再收掉左右上的多餘留白，不能再對下緣做 autocrop，否則會抹掉「刻意讓每張
+    frame 的最後一列都等於基準線」這個效果。
+    """
+    min_x, max_x, min_y = img.width, -1, img.height
+    for y in range(img.height):
+        row = img.pixels[y]
+        for x in range(img.width):
+            if row[x][3] > 0:
+                if x < min_x:
+                    min_x = x
+                if x > max_x:
+                    max_x = x
+                if y < min_y:
+                    min_y = y
+    if max_x < 0:
+        return img
+    h = img.height - min_y
+    return img.crop(min_x, min_y, max_x - min_x + 1, h)
+
+
+def slice_main_role_walk_v2(sheet: Image, regions: list, dedup_fn) -> list:
+    """裁出 `main_role_walk_v2.png` 某一列（走路 8 幀或待機 4 幀）：去背 + 去雜點 + 依
+    `dedup_fn` 決定的策略清連通塊，最後用「共享地面基準線」裁切取代逐幀獨立 autocrop。
+
+    背景：舊版 `slice_main_role_column`（`main_role_walk.png`）對每個 frame 各自
+    `autocrop`，取「該 frame 自己的最下面不透明像素」當作 frame 底邊。這在走路循環圖裡
+    是個問題——素材表本體腳步高度天生有 1~2px 的自然擺動（加上腳底若殘留一絲去背後的
+    陰影殘跡，殘跡範圍逐幀不同），逐幀獨立 autocrop 會讓每幀的「底邊」落在不同的
+    實際地面高度，套用到遊戲的 anchorPoint (0.5,0) 底部對齊後，角色在原地走路動畫時
+    會逐幀垂直跳動，就是使用者回報的「像在飄」的成因。
+
+    修法：**共享基準線**——8 幀（或 4 幀）先各自跑完整去背流程，量出每幀「自己最下面
+    的不透明列」，取這批數值裡最小的一個（即最保守、離頂端最近的那條線）當全部 frame
+    共用的地面基準線；每幀都裁到「最後一列 = 這條共享基準線」，落差在基準線以下的 1~2px
+    （其他 frame 天然多出來的腳步差異）直接裁掉——因為基準線取的是「最小值」，保證每幀
+    在該列本身一定还有不透明像素（该列必然落在該幀腳部本體範圍內，不會裁出空白列），
+    所以每一幀輸出的 bottomPad 必為 0。裁完基準線後才對左/右/上緣做 `autocrop`
+    （`_autocrop_left_right_top`，不可再動下緣），確保左右邊界依然貼合本體。
+    最後套 `pad_to_common_size`（水平置中 + 底部對齊）讓 8（或 4）幀寬高一致——因為
+    下緣已經是共享基準線，底部對齊不會重新引入垂直跳動，只是把較窄/較矮的 frame 置中/
+    向上補滿透明像素。
+
+    `dedup_fn` 由呼叫端決定：
+    - 走路 8 幀：`keep_largest_component_dilated`（本體是單一連通塊，含影子的孤立
+      殘留可直接靠「只留最大塊」丟棄，同 `slice_main_role_column`）。
+    - 待機 4 幀：**不能**用「只留最大塊」——frame 2 的呼吸白霧、frame 3 的飄落樹葉+
+      閃光都是刻意設計、與角色本體不相連的獨立小色塊（`21_ASSET_OVERHAUL_PLAN.md`
+      待機微互動範疇），用 `keep_largest_component_dilated` 會把這些裝飾當雜訊砍掉。
+      改用 `remove_small_components`（面積門檻，同 `slice_props` 對多部件道具的處理），
+      只清掉真正的雜點殘留，保留這些故意分離的裝飾色塊。
+    """
+    processed = []
+    baselines = []
+    for region in regions:
+        cropped = sheet.crop(region.x, region.y, region.w, region.h)
+        keyed = chroma_key_flood_color(cropped, MAIN_ROLE_WALK_V2_BG_COLOR, threshold=32)
+        keyed = despeckle_neutral_residue(keyed)
+        keyed = dedup_fn(keyed)
+        processed.append(keyed)
+        baselines.append(_lowest_opaque_row(keyed))
+
+    common_baseline = min(baselines)
+    frames = []
+    for keyed in processed:
+        trimmed = keyed.crop(0, 0, keyed.width, common_baseline + 1)
+        trimmed = _autocrop_left_right_top(trimmed)
+        frames.append(trimmed)
+    return pad_to_common_size(frames)
 
 
 def slice_main_role_column(sheet: Image, rows: list) -> list:
@@ -2449,6 +2572,37 @@ def main() -> None:
             print(f"wrote {out_path} ({frame.width}x{frame.height})")
     else:
         print(f"note: {MAIN_ROLE_SHEET} not found, skipping hero slicing")
+
+    # --- 接手任務：`design/main_role_walk_v2.png` 取代 `main_role_walk.png`，重切主角
+    # 走路 8 幀（OVERWRITE 上面剛寫的 `right_0..7.png`，v2 勝出，見 `slice_main_role_walk_v2`
+    # docstring）+ 新增待機 4 幀（`idle_0..3.png`，本波只切圖，動畫接線留給後續 session）。
+    # 刻意放在舊 `MAIN_ROLE_WALK_SHEET` 區塊之後執行，讓 v2 產出的 `right_*.png` 是磁碟上
+    # 最終版本；若 v2 素材表不存在則整段略過，保留舊版 `right_0..7.png` 不變（向後相容）。
+    if os.path.exists(MAIN_ROLE_WALK_V2_SHEET):
+        main_role_walk_v2_sheet = decode_png(MAIN_ROLE_WALK_V2_SHEET)
+        print(f"main_role_walk_v2_sheet: {main_role_walk_v2_sheet.width}x{main_role_walk_v2_sheet.height}")
+
+        walk_v2_frames = slice_main_role_walk_v2(
+            main_role_walk_v2_sheet,
+            MAIN_ROLE_WALK_V2_ROW,
+            lambda im: keep_largest_component_dilated(im, dilate_px=3),
+        )
+        for i, frame in enumerate(walk_v2_frames):
+            out_path = os.path.join(char_dir, f"right_{i}.png")
+            encode_png(frame, out_path)
+            print(f"wrote {out_path} ({frame.width}x{frame.height}) [v2, overwrites v1]")
+
+        idle_v2_frames = slice_main_role_walk_v2(
+            main_role_walk_v2_sheet,
+            MAIN_ROLE_IDLE_V2_ROW,
+            lambda im: remove_small_components(im, min_area=12),
+        )
+        for i, frame in enumerate(idle_v2_frames):
+            out_path = os.path.join(char_dir, f"idle_{i}.png")
+            encode_png(frame, out_path)
+            print(f"wrote {out_path} ({frame.width}x{frame.height}) [v2 idle]")
+    else:
+        print(f"note: {MAIN_ROLE_WALK_V2_SHEET} not found, keeping v1 right_0..7.png, no idle frames")
 
     # --- 旅伴向右走路 frame（美術大改版第 1 波，`21` §4：旅伴改讀 design/resource_v2.png
     # 的「主角-女（冒險者）」走路幀，取代舊 asset_sheet.png 角色列）---
