@@ -65,6 +65,12 @@ MOUNTAIN_PALACE_SHEET = os.path.join(REPO_ROOT, "design", "mountain_palace.png")
 # 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
 SNOW_MOUNTAIN_SHEET = os.path.join(REPO_ROOT, "design", "snow_mountain.png")
 MAGIC_CITY_SHEET = os.path.join(REPO_ROOT, "design", "magic_city.png")
+# 第 7 波（接手任務：hotspring/mountain_palace/magic_city 管線推廣到第六個 layered 地域）：
+# `design/holy_city.png`（歐式高奇幻聖光之城，白金聖堂/天使雕像/鐘塔拱門/十字紋章旗/
+# 玫瑰花窗/噴泉/燭台，聖光天空），1536x1024，版式與 magic_city 完全相同——遠景含天空
+# 不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口。座標由
+# Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
+HOLY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "holy_city.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -1917,6 +1923,101 @@ def slice_magic_city_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 聖光之城（接手任務：magic_city 管線推廣到第六個 layered 地域，`design/holy_city.png`，
+# 1536x1024，版式與 magic_city 完全相同——遠景含天空不去背、中景/前景/道具皆洋紅
+# `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。五帶 y 範圍：
+#   Far（聖光雲海+漂浮聖城天際線+光柱，不去背）：           y=0..274   （h=275）
+#   Mid（洋紅底聖堂/鐘塔聚落，去背）：                      y=275..494 （h=220）
+#   Fore（洋紅底鐘塔拱門/主教堂/天使雕像/紀念碑噴泉，去背）： y=495..730 （h=236）
+#   Ground（石磚步道+十字紋章鑲嵌，不去背，只補頂緣洋紅缺口）：y=790..851 （h=62，
+#                                          x=12..1523，左右各裁掉 12px，同
+#                                          magic_city 12px inset 校準；平台為透視梯形，
+#                                          頂緣兩側有較寬洋紅殘留，交給 `patch_magenta_columns`
+#                                          逐欄向下/向上找最近非洋紅像素填補）。
+#   Props（洋紅底道具列，去背）：                          y=852..1023（h=172）
+# 去背手法完全沿用 magic_city 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+HOLY_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=275)
+HOLY_CITY_BG_MID = Region(x=0, y=275, w=1536, h=220)
+HOLY_CITY_BG_FORE = Region(x=0, y=495, w=1536, h=236)
+HOLY_CITY_BG_GROUND = Region(x=12, y=790, w=1512, h=62)
+HOLY_CITY_PROPS_REGION = Region(x=0, y=852, w=1536, h=172)
+
+HOLY_CITY_LABEL_RECT = Region(x=0, y=0, w=112, h=44)
+HOLY_CITY_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=44)
+
+# 道具列 12 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：路燈／十字紋章旗／天使雕像／柏樹／花卉水甕／木箱／木桶／
+# 花圃／石長椅／噴泉／燭台／彩繪玫瑰窗。範圍刻意留餘裕，去背 + autocrop 後收斂到精確
+# bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+HOLY_CITY_PROP_REGIONS: dict = {
+    "street_lamp": Region(x=90, y=0, w=120, h=172),
+    "cross_banner": Region(x=210, y=0, w=79, h=172),
+    "angel_statue": Region(x=289, y=0, w=102, h=172),
+    "cypress": Region(x=391, y=0, w=84, h=172),
+    "flower_urn": Region(x=475, y=0, w=124, h=172),
+    "crate": Region(x=599, y=0, w=147, h=172),
+    "barrel": Region(x=746, y=0, w=100, h=172),
+    "flower_box": Region(x=846, y=0, w=160, h=172),
+    "stone_bench": Region(x=1006, y=0, w=161, h=172),
+    "fountain": Region(x=1167, y=0, w=142, h=172),
+    "candelabra": Region(x=1309, y=0, w=80, h=172),
+    "stained_window": Region(x=1389, y=0, w=147, h=172),
+}
+# 細桿件/薄邊框（路燈燈柱、紋章旗桿、燭台細枝）用 `keep_largest_component_dilated`
+# 防斷；其餘本身較粗實的道具用 `remove_small_components` 保留分離部件。
+_HOLY_CITY_DILATED_PROPS = {"street_lamp", "cross_banner", "candelabra"}
+
+
+def slice_holy_city_bg(sheet: Image) -> dict:
+    """聖光之城背景切圖：手法與 `slice_magic_city_bg` 完全一致（far 不去背當 backdrop +
+    水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(HOLY_CITY_BG_FAR.x, HOLY_CITY_BG_FAR.y, HOLY_CITY_BG_FAR.w, HOLY_CITY_BG_FAR.h),
+        HOLY_CITY_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(HOLY_CITY_BG_MID.x, HOLY_CITY_BG_MID.y, HOLY_CITY_BG_MID.w, HOLY_CITY_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, HOLY_CITY_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(HOLY_CITY_BG_FORE.x, HOLY_CITY_BG_FORE.y, HOLY_CITY_BG_FORE.w, HOLY_CITY_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, HOLY_CITY_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `HOLY_CITY_BG_GROUND` 校準說明）已經避開「地面平台」標籤方框
+    # 所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(HOLY_CITY_BG_GROUND.x, HOLY_CITY_BG_GROUND.y, HOLY_CITY_BG_GROUND.w, HOLY_CITY_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_holy_city_props(sheet: Image) -> dict:
+    """聖光之城道具列切圖：手法與 `slice_magic_city_props` 完全一致（先蓋掉整條道具列的
+    標籤方框，再逐一裁切去背 + 依 `_HOLY_CITY_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = HOLY_CITY_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, HOLY_CITY_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in HOLY_CITY_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _HOLY_CITY_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -2415,6 +2516,26 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {MAGIC_CITY_SHEET} not found, skipping magic_city region slicing")
+
+    # --- 聖光之城（接手任務：magic_city 管線推廣，`design/holy_city.png`）：
+    # 排進 13 地域循環，`FYW_DEBUG_REGION=holy_city` 可直接截圖驗收。---
+    if os.path.exists(HOLY_CITY_SHEET):
+        holy_city_sheet = decode_png(HOLY_CITY_SHEET)
+        print(f"holy_city_sheet: {holy_city_sheet.width}x{holy_city_sheet.height}")
+
+        holy_city_bg_dir = os.path.join(OUT_ROOT, "regions", "holy_city", "bg")
+        for name, img in slice_holy_city_bg(holy_city_sheet).items():
+            out_path = os.path.join(holy_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        holy_city_props_dir = os.path.join(OUT_ROOT, "regions", "holy_city", "props")
+        for name, img in slice_holy_city_props(holy_city_sheet).items():
+            out_path = os.path.join(holy_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {HOLY_CITY_SHEET} not found, skipping holy_city region slicing")
 
 
 def inspect(sheet: Image) -> None:

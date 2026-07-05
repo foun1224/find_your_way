@@ -4,10 +4,10 @@ import Foundation
 /// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
 /// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
 /// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 12 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
-/// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity）：
+/// **目前上線的序列是 13 地域循環**（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
+/// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity）：
 /// `grassland → village2 → valley → kingdom → village3 → hotspringVillage → harbor →
-/// snowMountain → skyVillage → mountainPalace → magicCity → skyCity`。
+/// snowMountain → skyVillage → mountainPalace → magicCity → holyCity → skyCity`。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
@@ -56,15 +56,22 @@ public enum RegionType: Equatable, CaseIterable {
     /// （`isLayered`），地面平台不去背。排進循環，銜接仙俠山宮與天空魔法城之間
     /// （仙俠山宮 → 浮空魔法之城 → 天空魔法城，天界奇幻濃度依序遞增到最高點）。
     case magicCity
+    /// 聖光之城（`design/holy_city.png`，接手任務：把 magic_city 驗證過的「洋紅去背 +
+    /// 真多層視差」管線推廣到第六個 layered 地域）：歐式高奇幻聖光之城，白金聖堂/
+    /// 天使雕像/鐘塔拱門/十字紋章旗/玫瑰花窗/噴泉/燭台，遠景含天空、中景/前景/道具皆
+    /// 洋紅底去背成透明（`isLayered`），地面平台不去背。排進循環，銜接浮空魔法之城與
+    /// 天空魔法城之間（浮空魔法之城 → 聖光之城 → 天空魔法城，天界奇幻＋聖光神聖感
+    /// 依序遞增到最高點，收束整個「天界」序列）。
+    case holyCity
 
     /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
-    /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity）：12 地域循環，
-    /// 旅程節奏由近人到奇幻——草原 → 村莊A → 山谷 → 王國 → 村莊B → 溫泉山村 → 海港 →
-    /// 雪山王國 → 天空村莊 → 仙俠山宮 → 浮空魔法之城 → 天空魔法城 →（回到草原）。
+    /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity）：13 地域
+    /// 循環，旅程節奏由近人到奇幻——草原 → 村莊A → 山谷 → 王國 → 村莊B → 溫泉山村 → 海港 →
+    /// 雪山王國 → 天空村莊 → 仙俠山宮 → 浮空魔法之城 → 聖光之城 → 天空魔法城 →（回到草原）。
     /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。其餘骨架 case
     /// （riverlands/highlands/coastalReach）保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .skyVillage, .mountainPalace, .magicCity, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -98,6 +105,7 @@ public enum RegionType: Equatable, CaseIterable {
         case .mountainPalace: return "mountain_palace"
         case .snowMountain: return "snow_mountain"
         case .magicCity: return "magic_city"
+        case .holyCity: return "holy_city"
         }
     }
 
@@ -106,8 +114,8 @@ public enum RegionType: Equatable, CaseIterable {
     /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
     /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
     /// far+ground」的過渡 workaround。目前有 `harbor`/`hotspringVillage`/`mountainPalace`/
-    /// `snowMountain`/`magicCity`（皆已排進循環）。
-    private static let layeredRegions: Set<RegionType> = [.harbor, .hotspringVillage, .mountainPalace, .snowMountain, .magicCity]
+    /// `snowMountain`/`magicCity`/`holyCity`（皆已排進循環）。
+    private static let layeredRegions: Set<RegionType> = [.harbor, .hotspringVillage, .mountainPalace, .snowMountain, .magicCity, .holyCity]
 
     /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。
     public var isLayered: Bool { RegionType.layeredRegions.contains(self) }

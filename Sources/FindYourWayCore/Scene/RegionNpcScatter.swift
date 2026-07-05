@@ -124,6 +124,17 @@ public enum RegionNpcScatter {
         Slot(baseX: 830, npcName: "merchant"),
     ]
 
+    /// 聖光之城地域槽位表（接手任務：magic_city 管線推廣到第六個 layered 地域，`21` §3）：
+    /// 學者/藥師/樂師/商人——與 `magicCitySlots` 同款人口組成但獨立排法（重用既有共享
+    /// `npc/` 角色，不新增美術），銜接浮空魔法之城與天空魔法城之間的過渡感，維持天界
+    /// 奇幻序列一致的居民風格，收束在聖光之城的神聖氛圍。
+    public static let holyCitySlots: [Slot] = [
+        Slot(baseX: 100, npcName: "scholar"),
+        Slot(baseX: 350, npcName: "apothecary"),
+        Slot(baseX: 600, npcName: "musician"),
+        Slot(baseX: 830, npcName: "merchant"),
+    ]
+
     /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
     /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
@@ -145,6 +156,8 @@ public enum RegionNpcScatter {
         case .snowMountain: return snowMountainSlots
         // 浮空魔法之城（接手任務，hotspring/mountain_palace 管線推廣）：居民組成見 `magicCitySlots`。
         case .magicCity: return magicCitySlots
+        // 聖光之城（接手任務，magic_city 管線推廣）：居民組成見 `holyCitySlots`。
+        case .holyCity: return holyCitySlots
         }
     }
 
