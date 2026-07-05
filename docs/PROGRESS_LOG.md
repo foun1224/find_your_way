@@ -40,7 +40,12 @@
 `meadowOrigin → village3 → kingdom → hotspringVillage → harbor → snowMountain → steampunkCity → futureCity → skyVillage → mountainPalace → magicCity → holyCity → skyCity`
 情感弧：近人開場（農村→樹屋村→城堡首都）→ 旅途（溫泉→海港→雪山→蒸氣/賽博雙城）→ 飄浮天界（浮空村→仙宮→魔法城→聖光城→天空城終站）。
 
-- 測試 **338/338 綠**。實機逐張截圖驗收 13 地域角色皆踩實地面、無浮空、無洋紅殘留。
+**NPC 移除 + idle 接線 + 拉場景大小**（承使用者連續需求）：
+- **移除區域路人 NPC**（主角獨行）：`RegionNpcScatter.renderingEnabled=false` 可逆旗標，`buildNpcNodes` gate 住不建節點；槽位/測試/美術休眠保留。實機驗收 13 地域只剩主角。
+- **側視 idle 動畫接線**：`CharacterNode.runIdleAnimation`（idle_0..3，5.6s 慢節奏）；「陪你歇」長歇息改播側視 idle 循環（活著地歇著非凍結幀），正面「看你」一瞥仍由 `playRestLookAtViewer` 保留；起身/睡眠恢復停 idleCycle。
+- **拉場景大小（reflow + 右下角拉手）**：`PetWindowConfig.isInResizeGrip`/`resizedFrame` 純函式；`PetWindow` resize/move/click 三互斥；`GameScene.didChangeSize` reflow（重定位角色 x + region type 失效逼 `replaceCurrentRegion` 用新 size 重建 → far 依新高、tile 依新寬 → `applyWorldScroll`）；`Preferences.windowSize` 持久化。實機 720x420 驗收：主角同大小、露出更寬世界、far 填滿、無空隙無浮空。**待使用者實際拖角落拉手感受手感**（幾何已單元測試，drag 手感需 live 體驗）。
+
+- 測試 **344/344 綠**。實機逐張截圖驗收 13 地域角色皆踩實地面、無浮空、無洋紅殘留。
 **待使用者**：① 13 地域 GUI 實走整體體感；② CharacterNode idle 接線（4 待機幀已切好待用）；③ future_city 喚醒度最高、mountain_palace 仙俠味去留（已留備註）；④ 陪伴 P1–P4 live 校準。
 
 ---
