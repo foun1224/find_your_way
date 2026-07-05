@@ -240,6 +240,19 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "candelabra"),
     ]
 
+    /// 蒸氣龐克飛船城地域槽位表（接手任務：holy_city 管線推廣到第七個 layered 地域，
+    /// `21` §2/§4）：道具池換成 `regions/steampunk_city/props/` 切出的黃銅飛船城道具
+    /// （瓦斯燈/指路牌/木箱/木桶/齒輪引擎/黃銅望遠鏡等），間距手法同 `holyCitySlots`
+    /// （確定性、依 `baseX` 遞增排列）。
+    public static let steampunkCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "gas_lamp"),
+        Slot(baseX: 130, propName: "signpost"),
+        Slot(baseX: 220, propName: "crate"),
+        Slot(baseX: 310, propName: "barrel"),
+        Slot(baseX: 400, propName: "gear_engine"),
+        Slot(baseX: 490, propName: "brass_telescope"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -264,6 +277,8 @@ public enum PropScatter {
         case .magicCity: return magicCitySlots
         // 聖光之城（接手任務，magic_city 管線推廣）：道具池見 `holyCitySlots`。
         case .holyCity: return holyCitySlots
+        // 蒸氣龐克飛船城（接手任務，holy_city 管線推廣）：道具池見 `steampunkCitySlots`。
+        case .steampunkCity: return steampunkCitySlots
         }
     }
 

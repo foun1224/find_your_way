@@ -215,7 +215,26 @@ final class PropScatterTests: XCTestCase {
 
     func testSlotsForRegionPicksHolyCityPool() {
         XCTAssertEqual(PropScatter.slots(for: .holyCity), PropScatter.holyCitySlots)
-        XCTAssertFalse(PropScatter.slots(for: .holyCity).isEmpty, "聖光之城已排進 13 地域循環，不該再是空槽位表")
+        XCTAssertFalse(PropScatter.slots(for: .holyCity).isEmpty, "聖光之城已排進 14 地域循環，不該再是空槽位表")
+    }
+
+    func testSteampunkCitySlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.steampunkCitySlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "蒸氣龐克飛船城槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.steampunkCitySlots.isEmpty, "蒸氣龐克飛船城槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.steampunkCitySlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksSteampunkCityPool() {
+        XCTAssertEqual(PropScatter.slots(for: .steampunkCity), PropScatter.steampunkCitySlots)
+        XCTAssertFalse(PropScatter.slots(for: .steampunkCity).isEmpty, "蒸氣龐克飛船城已排進 14 地域循環，不該再是空槽位表")
     }
 
     // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）

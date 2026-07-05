@@ -71,6 +71,12 @@ MAGIC_CITY_SHEET = os.path.join(REPO_ROOT, "design", "magic_city.png")
 # 不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口。座標由
 # Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
 HOLY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "holy_city.png")
+# 第 8 波（接手任務：holy_city 管線推廣到第七個 layered 地域）：
+# `design/steampunk_city.png`（蒸氣龐克飛船城，黃銅飛船/鐘塔/煙囪/蒸汽火車頭/瓦斯燈/
+# 齒輪/黃銅儀表/望遠鏡/十字旗幟，暖黃銅金工業色調），1536x1024，版式與 holy_city 完全
+# 相同——遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補
+# 頂緣洋紅缺口。座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
+STEAMPUNK_CITY_SHEET = os.path.join(REPO_ROOT, "design", "steampunk_city.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -2018,6 +2024,104 @@ def slice_holy_city_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 蒸氣龐克飛船城（接手任務：holy_city 管線推廣到第七個 layered 地域，
+# `design/steampunk_city.png`，1536x1024，版式與 holy_city 完全相同——遠景含天空不去背、
+# 中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。五帶 y 範圍：
+#   Far（暮色天際+飛船剪影，不去背）：                       y=0..271   （h=272）
+#   Mid（洋紅底鐘塔/煙囪聚落，去背）：                       y=272..494 （h=223）
+#   Fore（洋紅底黃銅飛船塢/齒輪高塔/蒸汽管線，去背）：        y=495..785 （h=291）
+#   Ground（鉚接鋼板步道，不去背，只補頂緣洋紅缺口）：        y=790..851 （h=62，
+#                                          x=12..1523，左右各裁掉 12px，同
+#                                          holy_city 12px inset 校準；平台頂緣兩側有
+#                                          較寬洋紅殘留，交給 `patch_magenta_columns`
+#                                          逐欄向下/向上找最近非洋紅像素填補）。
+#   Props（洋紅底道具列，去背）：                           y=852..1023（h=172）
+# 去背手法完全沿用 holy_city 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+STEAMPUNK_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=272)
+STEAMPUNK_CITY_BG_MID = Region(x=0, y=272, w=1536, h=223)
+STEAMPUNK_CITY_BG_FORE = Region(x=0, y=495, w=1536, h=291)
+STEAMPUNK_CITY_BG_GROUND = Region(x=12, y=790, w=1512, h=62)
+STEAMPUNK_CITY_PROPS_REGION = Region(x=0, y=852, w=1536, h=172)
+
+STEAMPUNK_CITY_LABEL_RECT = Region(x=0, y=0, w=120, h=52)
+STEAMPUNK_CITY_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=48)
+
+# 道具列 12 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：瓦斯燈／指路牌／木箱／木桶／齒輪引擎／發光管／蒸汽火車頭／
+# 黃銅儀表台／十字紋章旗／特斯拉燈柱／黃銅望遠鏡／公告板。範圍以相鄰道具中點分界，留
+# 餘裕，去背 + autocrop 後收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，
+# 不會誤裁鄰居。
+STEAMPUNK_CITY_PROP_REGIONS: dict = {
+    "gas_lamp": Region(x=0, y=0, w=219, h=172),
+    "signpost": Region(x=219, y=0, w=114, h=172),
+    "crate": Region(x=333, y=0, w=129, h=172),
+    "barrel": Region(x=462, y=0, w=108, h=172),
+    "gear_engine": Region(x=570, y=0, w=148, h=172),
+    "glow_tube": Region(x=718, y=0, w=120, h=172),
+    "steam_engine": Region(x=838, y=0, w=146, h=172),
+    "brass_gauge": Region(x=984, y=0, w=125, h=172),
+    "cross_banner": Region(x=1109, y=0, w=87, h=172),
+    "tesla_lamp": Region(x=1196, y=0, w=77, h=172),
+    "brass_telescope": Region(x=1273, y=0, w=117, h=172),
+    "notice_board": Region(x=1390, y=0, w=146, h=172),
+}
+# 細桿件/薄邊框（瓦斯燈柱、指路牌柱、紋章旗桿、特斯拉燈柱）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用
+# `remove_small_components` 保留分離部件。
+_STEAMPUNK_CITY_DILATED_PROPS = {"gas_lamp", "signpost", "cross_banner", "tesla_lamp"}
+
+
+def slice_steampunk_city_bg(sheet: Image) -> dict:
+    """蒸氣龐克飛船城背景切圖：手法與 `slice_holy_city_bg` 完全一致（far 不去背當
+    backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，
+    只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(STEAMPUNK_CITY_BG_FAR.x, STEAMPUNK_CITY_BG_FAR.y, STEAMPUNK_CITY_BG_FAR.w, STEAMPUNK_CITY_BG_FAR.h),
+        STEAMPUNK_CITY_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(STEAMPUNK_CITY_BG_MID.x, STEAMPUNK_CITY_BG_MID.y, STEAMPUNK_CITY_BG_MID.w, STEAMPUNK_CITY_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, STEAMPUNK_CITY_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(STEAMPUNK_CITY_BG_FORE.x, STEAMPUNK_CITY_BG_FORE.y, STEAMPUNK_CITY_BG_FORE.w, STEAMPUNK_CITY_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, STEAMPUNK_CITY_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `STEAMPUNK_CITY_BG_GROUND` 校準說明）已經避開「地面平台」標籤
+    # 方框所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(STEAMPUNK_CITY_BG_GROUND.x, STEAMPUNK_CITY_BG_GROUND.y, STEAMPUNK_CITY_BG_GROUND.w, STEAMPUNK_CITY_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_steampunk_city_props(sheet: Image) -> dict:
+    """蒸氣龐克飛船城道具列切圖：手法與 `slice_holy_city_props` 完全一致（先蓋掉整條
+    道具列的標籤方框，再逐一裁切去背 + 依 `_STEAMPUNK_CITY_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = STEAMPUNK_CITY_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, STEAMPUNK_CITY_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in STEAMPUNK_CITY_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _STEAMPUNK_CITY_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -2536,6 +2640,26 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {HOLY_CITY_SHEET} not found, skipping holy_city region slicing")
+
+    # --- 蒸氣龐克飛船城（接手任務：holy_city 管線推廣，`design/steampunk_city.png`）：
+    # 排進 14 地域循環，`FYW_DEBUG_REGION=steampunk_city` 可直接截圖驗收。---
+    if os.path.exists(STEAMPUNK_CITY_SHEET):
+        steampunk_city_sheet = decode_png(STEAMPUNK_CITY_SHEET)
+        print(f"steampunk_city_sheet: {steampunk_city_sheet.width}x{steampunk_city_sheet.height}")
+
+        steampunk_city_bg_dir = os.path.join(OUT_ROOT, "regions", "steampunk_city", "bg")
+        for name, img in slice_steampunk_city_bg(steampunk_city_sheet).items():
+            out_path = os.path.join(steampunk_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        steampunk_city_props_dir = os.path.join(OUT_ROOT, "regions", "steampunk_city", "props")
+        for name, img in slice_steampunk_city_props(steampunk_city_sheet).items():
+            out_path = os.path.join(steampunk_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {STEAMPUNK_CITY_SHEET} not found, skipping steampunk_city region slicing")
 
 
 def inspect(sheet: Image) -> None:

@@ -281,6 +281,9 @@ public final class GameScene: SKScene {
         case "magic_city", "magiccity": return .magicCity
         // 聖光之城（接手任務：magic_city 管線推廣到第六個 layered 地域，`RegionType.holyCity`）。
         case "holy_city", "holycity": return .holyCity
+        // 蒸氣龐克飛船城（接手任務：holy_city 管線推廣到第七個 layered 地域，
+        // `RegionType.steampunkCity`）。
+        case "steampunk_city", "steampunkcity": return .steampunkCity
         default: return nil
         }
     }
