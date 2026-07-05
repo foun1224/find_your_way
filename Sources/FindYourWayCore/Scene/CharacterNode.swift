@@ -30,12 +30,43 @@ public final class CharacterNode: SKSpriteNode {
 
     /// 呼吸 scale 振幅：1.0 ↔ 1.0+此值。刻意極小，克制到幾乎不可察覺，只傳達「活著」的訊息，
     /// 不能像卡通彈跳（§6 無 jolt）。
-    private static let breathScaleAmplitude: CGFloat = 0.012
+    /// 數值來自 `BreathingProfile`（純邏輯、可獨立測試的 source of truth）。
+    private static let breathScaleAmplitude = CGFloat(BreathingProfile.walkScaleAmplitude)
 
-    /// 呼吸一個完整週期（吸+吐）的秒數，慢、有機。
-    private static let breathPeriodSeconds: TimeInterval = 3.6
+    /// 呼吸一個完整週期（吸+吐）的秒數，慢、有機。數值來自 `BreathingProfile`。
+    private static let breathPeriodSeconds = BreathingProfile.walkPeriodSeconds
 
     private static let breathingKey = "breathing"
+
+    // MARK: - P3 休息呼吸（rest-breath co-regulation，`22_COMPANIONSHIP_DESIGN.md` §Stage P3）
+    //
+    // 走路時用一般呼吸（上方 `breathScaleAmplitude`/`breathPeriodSeconds`）；歇息時
+    // （「偶爾看你」`playRestLookAtViewer` 或「陪你歇」`playAwayRestPose`）切成更慢、
+    // 略深一點的「休息呼吸」，讓餘光瞥見的旅人成為可自願跟隨的呼吸節拍器（entrainment），
+    // 幫使用者也降交感喚醒（coherent breathing / HRV 共振）。仍是同一條 `breathingKey`
+    // scale action，只是換成不同的週期/振幅參數——不會疊加出兩條 breathing loop。
+
+    /// 休息呼吸週期（吸+吐）：~10 秒 ≈ 6 次/分，coherent breathing 常見範圍，
+    /// 比走路呼吸（3.6s）慢得多，才有「靜下來」的感覺。數值來自 `BreathingProfile`。
+    private static let restBreathPeriodSeconds = BreathingProfile.restPeriodSeconds
+
+    /// 休息呼吸振幅：比走路呼吸（0.012）略增，讓 10 秒的慢週期下仍可察覺「活著」，
+    /// 但仍克制、不能變成明顯脈動（`02` §6 低喚醒）。數值來自 `BreathingProfile`。
+    private static let restBreathScaleAmplitude = CGFloat(BreathingProfile.restScaleAmplitude)
+
+    /// 呼吸模式切換（走路↔休息）的過場秒數：不直接把新週期的 action 接上舊的（兩者振幅/週期
+    /// 不同，接口處必然是不連續的兩條曲線，直接接會有一個小 scale 跳動）；而是先把當前
+    /// scale（不論此刻落在呼吸曲線的哪個點）柔和 ease 回 1.0 基準，再起新週期的循環——
+    /// 這樣切換本身也是一次「呼吸」的自然收尾，不是硬切。
+    private static let breathModeTransitionSeconds: TimeInterval = 0.8
+
+    /// 呼吸模式切換過場動作的 key（與 `breathingKey` 分開，避免「切換動作自己在跑的時候
+    /// 又想覆寫自己」的自我覆寫問題——過場結束後才用 `breathingKey` 起新循環）。
+    private static let breathTransitionKey = "breathTransition"
+
+    /// 目前是否為「休息呼吸」模式，供 `switchToRestBreathing`/`switchToWalkBreathing`
+    /// 判斷是否需要切換（避免重疊觸發同一模式），以及 `reducedMotion` 復原時知道該恢復哪一種。
+    private var isUsingRestBreathing = false
 
     // MARK: - 偶爾看你 / 靠近感應共用的「看向觀看者」動作（`13_PSYCH_AUDIT.md` P1/P2）
 
@@ -63,9 +94,16 @@ public final class CharacterNode: SKSpriteNode {
             guard reducedMotion != oldValue else { return }
             if reducedMotion {
                 removeAction(forKey: Self.breathingKey)
+                removeAction(forKey: Self.breathTransitionKey)
                 setScale(1.0)
             } else if action(forKey: Self.breathingKey) == nil {
-                runBreathing()
+                // 復原時延續切換前的模式（走路 or 休息），而不是一律回走路呼吸——
+                // 例如 reduce-motion 是在「陪你歇」期間被關閉的，復原後應該是慢的休息呼吸。
+                if isUsingRestBreathing {
+                    runBreathing(period: Self.restBreathPeriodSeconds, amplitude: Self.restBreathScaleAmplitude)
+                } else {
+                    runBreathing(period: Self.breathPeriodSeconds, amplitude: Self.breathScaleAmplitude)
+                }
             }
         }
     }
@@ -88,7 +126,7 @@ public final class CharacterNode: SKSpriteNode {
             self.frontTextures = ArtCatalog.sequentialTextures(directory: "char_hero", prefix: "front_")
             runWalkAnimation(textures: textures)
             if !reducedMotion {
-                runBreathing()
+                runBreathing(period: Self.breathPeriodSeconds, amplitude: Self.breathScaleAmplitude)
             }
         } else {
             // 優雅降級：找不到切好的美術（例如尚未執行 `scripts/slice_assets.py`）。
@@ -125,12 +163,46 @@ public final class CharacterNode: SKSpriteNode {
     /// 待機呼吸（`13_PSYCH_AUDIT.md` P1）：極緩的 scale 起伏，永遠疊在走路/看你之上，
     /// 傳達「活著」——刻意克制到幾乎不可察覺，不能是卡通式彈跳（`02` §6 低喚醒）。
     /// 走路用的 texture 循環（`walkCycle`）只改 texture、不動 scale，兩者互不衝突可同時跑。
-    private func runBreathing() {
-        let inhale = SKAction.scale(to: 1.0 + Self.breathScaleAmplitude, duration: Self.breathPeriodSeconds / 2)
+    ///
+    /// 走路呼吸（預設參數）與休息呼吸（`22` §Stage P3，`switchToRestBreathing` 傳入慢週期/
+    /// 略增振幅）共用這一個實作，差別只在週期/振幅，動作本身的 easing 語言一致。
+    private func runBreathing(period: TimeInterval, amplitude: CGFloat) {
+        let inhale = SKAction.scale(to: 1.0 + amplitude, duration: period / 2)
         inhale.timingMode = .easeInEaseOut
-        let exhale = SKAction.scale(to: 1.0, duration: Self.breathPeriodSeconds / 2)
+        let exhale = SKAction.scale(to: 1.0, duration: period / 2)
         exhale.timingMode = .easeInEaseOut
         run(SKAction.repeatForever(SKAction.sequence([inhale, exhale])), withKey: Self.breathingKey)
+    }
+
+    /// 切到「休息呼吸」（`22` §Stage P3）：由 `playAwayRestPose`/`playRestLookAtViewer`
+    /// （非靠近感應的短暫一瞥）在進入歇息時呼叫。`reducedMotion` 下呼吸 loop 本就不存在，
+    /// 不做任何事；已經是休息呼吸時也不重複觸發（避免無意義的柔和過場疊加）。
+    private func switchToRestBreathing() {
+        guard !reducedMotion, !isUsingRestBreathing else { return }
+        isUsingRestBreathing = true
+        transitionBreathing(period: Self.restBreathPeriodSeconds, amplitude: Self.restBreathScaleAmplitude)
+    }
+
+    /// 切回「走路呼吸」：由 `endAwayRestPose`/`playRestLookAtViewer` 結束歇息時呼叫。
+    private func switchToWalkBreathing() {
+        guard !reducedMotion, isUsingRestBreathing else { return }
+        isUsingRestBreathing = false
+        transitionBreathing(period: Self.breathPeriodSeconds, amplitude: Self.breathScaleAmplitude)
+    }
+
+    /// 呼吸模式切換的共用實作：先把當前 scale 柔和 ease 回 1.0，過場動作跑在獨立的
+    /// `breathTransitionKey`（不是 `breathingKey` 本身），過場結束後才用 `runBreathing`
+    /// 起新週期的循環並掛回 `breathingKey`——這樣任何時刻 `breathingKey` 底下只會有一條
+    /// scale action，不會兩個 breathing loop 疊加，也不會有「動作在自己執行時覆寫自己」的問題。
+    private func transitionBreathing(period: TimeInterval, amplitude: CGFloat) {
+        removeAction(forKey: Self.breathingKey)
+        removeAction(forKey: Self.breathTransitionKey)
+        let settle = SKAction.scale(to: 1.0, duration: Self.breathModeTransitionSeconds)
+        settle.timingMode = .easeInEaseOut
+        let startNewLoop = SKAction.run { [weak self] in
+            self?.runBreathing(period: period, amplitude: amplitude)
+        }
+        run(SKAction.sequence([settle, startNewLoop]), withKey: Self.breathTransitionKey)
     }
 
     /// 偶爾停下看你 / 靠近感應 共用的「轉為面向觀看者」動作（`13_PSYCH_AUDIT.md` P1/P2，
@@ -147,6 +219,7 @@ public final class CharacterNode: SKSpriteNode {
     public func playRestLookAtViewer(
         duration: TimeInterval,
         transitionDuration: TimeInterval,
+        usesRestBreathing: Bool = true,
         completion: @escaping () -> Void
     ) {
         guard action(forKey: Self.restKey) == nil else {
@@ -154,10 +227,24 @@ public final class CharacterNode: SKSpriteNode {
             completion()
             return
         }
+
+        // P3 休息呼吸（`22` §Stage P3）：「偶爾看你」這種有一定停留時間的歇息會切成慢呼吸；
+        // `playProximityAcknowledgement`（靠近感應的一瞬即逝察覺，1 秒）傳 `usesRestBreathing:
+        // false`，避免在切換過場（0.8s）都還沒走完就又要切回去、造成兩次沒意義的柔和抖動。
+        if usesRestBreathing {
+            switchToRestBreathing()
+        }
+        let finishAndMaybeSwitchBack: () -> Void = usesRestBreathing
+            ? { [weak self] in
+                self?.switchToWalkBreathing()
+                completion()
+            }
+            : completion
+
         guard let frontTexture = frontTextures.first, !rightTextures.isEmpty else {
             // 素材未切出：優雅降級為純停頓（不轉身），仍走一樣的節奏。
             let wait = SKAction.wait(forDuration: duration)
-            let finish = SKAction.run(completion)
+            let finish = SKAction.run(finishAndMaybeSwitchBack)
             run(SKAction.sequence([wait, finish]), withKey: Self.restKey)
             return
         }
@@ -184,7 +271,7 @@ public final class CharacterNode: SKSpriteNode {
         let resumeWalkAndComplete = SKAction.run { [weak self] in
             guard let self else { return }
             self.runWalkAnimation(textures: self.rightTextures)
-            completion()
+            finishAndMaybeSwitchBack()
         }
 
         run(SKAction.sequence([turnToFront, hold, turnBack, resumeWalkAndComplete]), withKey: Self.restKey)
@@ -193,11 +280,15 @@ public final class CharacterNode: SKSpriteNode {
     /// 靠近感應的短版「察覺你來了」（`13_PSYCH_AUDIT.md` P2 / ADR-006 嚴格零功利）：
     /// 重用 `playRestLookAtViewer`，只是時間短很多（`ProximityAwareness.acknowledgeDurationSeconds`）、
     /// 純情感表達，呼叫端（`GameScene`）已負責節流/冷卻，本方法不重複判斷。
+    ///
+    /// **不切休息呼吸**（`usesRestBreathing: false`）：這只是一瞬即逝的「察覺你來了」（1 秒），
+    /// 不是真正的歇息，切了反而會在過場都還沒走完就要切回去，顯得像抖動（`22` §6 低喚醒）。
     public func playProximityAcknowledgement() {
         guard action(forKey: Self.restKey) == nil else { return }
         playRestLookAtViewer(
             duration: ProximityAwareness.acknowledgeDurationSeconds,
             transitionDuration: HeroRestSchedule.transitionDurationSeconds,
+            usesRestBreathing: false,
             completion: {}
         )
     }
@@ -222,6 +313,11 @@ public final class CharacterNode: SKSpriteNode {
     /// `GameScene` 仍會照常凍結世界捲動（不變式本身不依賴這裡有沒有視覺表現）。
     public func playAwayRestPose() {
         guard action(forKey: Self.restKey) == nil else { return }
+
+        // 呼吸切換獨立於姿態貼圖：即使 `front_` 幀未切出（下面的優雅降級 early-return），
+        // 「陪你歇」時休息呼吸仍應該生效——這是呼吸本身的行為，不依賴有沒有轉身視覺。
+        switchToRestBreathing()
+
         guard let frontTexture = frontTextures.first, !rightTextures.isEmpty else { return }
 
         removeAction(forKey: "walkCycle")
@@ -239,6 +335,7 @@ public final class CharacterNode: SKSpriteNode {
     /// 同樣只用 alpha 過場（無位移/縮放）。
     public func endAwayRestPose() {
         removeAction(forKey: Self.restKey)
+        switchToWalkBreathing()
         guard !rightTextures.isEmpty else { return }
 
         let half = HeroRestSchedule.transitionDurationSeconds / 2
@@ -259,6 +356,18 @@ public final class CharacterNode: SKSpriteNode {
     /// 正常走路，不做過場（這個情境的補間本就無意義，`resumeWithCatchUp` 對 `displayedDistance`
     /// 也是直接對齊、不補間，這裡呼應同一種「長時間中斷後直接歸零複雜狀態」原則）。
     public func forceResumeWalkingIfNeeded() {
+        // 呼吸也要跟著這條「長時間中斷後直接歸零複雜狀態」的安全網一起 reset：休息呼吸若卡在
+        // 睡眠前的狀態，直接（不補間）切回走路呼吸，呼應下面姿態/貼圖的「不做過場」處理方式。
+        if isUsingRestBreathing {
+            removeAction(forKey: Self.breathingKey)
+            removeAction(forKey: Self.breathTransitionKey)
+            isUsingRestBreathing = false
+            setScale(1.0)
+            if !reducedMotion {
+                runBreathing(period: Self.breathPeriodSeconds, amplitude: Self.breathScaleAmplitude)
+            }
+        }
+
         guard action(forKey: Self.restKey) != nil else { return }
         removeAction(forKey: Self.restKey)
         alpha = 1.0

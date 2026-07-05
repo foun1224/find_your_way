@@ -771,9 +771,13 @@ public final class GameScene: SKScene {
         }
         isCharacterResting = true
         let duration = HeroRestSchedule.restDurationSeconds(unit: Double.random(in: 0..<1))
+        // 雙鏡裁決（P3）：「偶爾看你」只停 2–3 秒，切入+切出休息呼吸各 0.8s 會佔掉大半、來不及
+        // 慢下來（共調需持續慢呼吸才有意義），且短窗塞兩段過渡是 churn。故週期性看你**維持走路呼吸**、
+        // 不切休息呼吸；休息呼吸只保留給「陪你歇」（長歇數分鐘，你瞥一眼時慢呼吸真的在）。
         character.playRestLookAtViewer(
             duration: duration,
-            transitionDuration: HeroRestSchedule.transitionDurationSeconds
+            transitionDuration: HeroRestSchedule.transitionDurationSeconds,
+            usesRestBreathing: false
         ) { [weak self] in
             self?.endHeroRest()
         }
