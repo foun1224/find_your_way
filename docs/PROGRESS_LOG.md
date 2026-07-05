@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-07-05 — 陪伴弧 P1–P4（準則一核心）+ 雙鏡工作法 + 美術新流程
+
+**工作法定調（記憶 [[dual-lens-review-policy]]）**：每次產出都過「心理學(Fable)×design-engineer(Emil review-animations 技能,`.agents/`)」雙鏡、實際看不嘴上說。衝突時心理學/非侵入優先。
+
+**陪伴弧（設計 `docs/22_COMPANIONSHIP_DESIGN.md`）**——主角獨行後陪的是使用者;解「社會臨場×Calm Tech非侵入」張力(陪伴＝可得+覺察+共存,非活動+要求)。全用良性訊號、**零窺視工作內容**(只讀 CGEventSource 閒置秒數)、無聲不彈窗、無健康說教、distance不變式、reduce-motion。
+- **P1 在場與歸來**：歸來的溫暖(螢幕喚醒/長閒置→活動)、陪你歇(閒置180s,活的姿態非凍幀,只凍displayedDistance)。PresenceSchedule純函式。
+- **P2 共時深化**：深夜陪伴(真實時刻,絕不勸睡—寫進測試 testNoLateNightLineMentionsSleepOrHealth)、關係性時刻(里程90000稀疏)。RelationalMilestones/LateNightPresence純函式。
+- **P3 靜定的錨**：休息呼吸共調(歇時呼吸切10s慢版≈6次/分,餘光可跟隨的節拍器)。BreathingProfile純函式。裁決:只用長歇非短看(churn)。
+- **P4 專注時退場**：連續活動>270s判心流→純減法暫停toast+收看你,休息(28s)恢復。FocusState純函式,與P1c分層。
+- 每階雙鏡通過才提交。**308測試綠**。**待使用者live體感校準**(振幅/門檻/語氣—感受型只有活過才知,已抽常數易調)。
+
+**美術新流程(治本,承使用者「改提示詞不要code workaround」指正)**：`docs/20`提示改「只有遠景含天空,中景/前景畫洋紅#FF00FF底可去背」→切圖洋紅chroma-key+de-fringe+邊緣羽化無縫(不鏡射)→真多層視差(RegionType.isLayered)。harbor已驗證取代sea_city進循環。主角走路換8幀真循環(main_role_walk,速度改固定0.9s/循環)。分享連結圖:curl public_content URL 直接下載。
+- **其餘7地域待使用者用新提示(洋紅格式)重生→我接成真視差layered**(現為舊格式單backdrop)。
+
+---
+
 ## 2026-07-05 — Session 1（夜間自主）— 美術大改版 Wave 1–3
 
 使用者重整全套素材（8 地域 + 主角 + 20 種居民，皆 1536×1024 照 `20` 規格）就寢，授權自主執行+自我驗證。計畫見 `21_ASSET_OVERHAUL_PLAN.md`。
