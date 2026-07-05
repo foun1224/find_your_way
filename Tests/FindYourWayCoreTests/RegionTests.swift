@@ -3,15 +3,15 @@ import XCTest
 
 /// `18_STAGE_B_SPEC.md` §2/§3/§6 + `19_STAGE_C_SPEC.md` §2/§5 + 美術大改版第 2 波
 /// `21_ASSET_OVERHAUL_PLAN.md` §2（第 3 波以 harbor 取代 seaCity；接手任務新增
-/// hotspringVillage）：9 地域循環（grassland→village2→valley→kingdom→village3→
-/// hotspringVillage→harbor→skyVillage→skyCity→回到 grassland）、邊界正確、
-/// Blend Zone crossfade 純函式（9 對相鄰邊界都要正確）。
+/// hotspringVillage、再新增 mountainPalace）：10 地域循環（grassland→village2→valley→
+/// kingdom→village3→hotspringVillage→harbor→skyVillage→mountainPalace→skyCity→
+/// 回到 grassland）、邊界正確、Blend Zone crossfade 純函式（10 對相鄰邊界都要正確）。
 final class RegionTests: XCTestCase {
 
-    /// `21` §2 上線序列（第 3 波取代版 + 接手任務新增 hotspringVillage），供以下測試逐一走過
-    /// （比逐一手寫 9 個 case 更不容易漏掉某對邊界）。
+    /// `21` §2 上線序列（第 3 波取代版 + 接手任務新增 hotspringVillage、mountainPalace），
+    /// 供以下測試逐一走過（比逐一手寫 10 個 case 更不容易漏掉某對邊界）。
     private static let expectedCycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .skyVillage, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .skyVillage, .mountainPalace, .skyCity,
     ]
 
     func testDistanceZeroIsFirstRegion() {
@@ -27,7 +27,7 @@ final class RegionTests: XCTestCase {
     func testCyclesThroughAllEightRegionsInOrder() {
         let length = Region.regionLength
         let cycle = Self.expectedCycle
-        XCTAssertEqual(cycle.count, 9, "9 地域循環（`21` §2 + 接手任務新增 hotspringVillage），這裡先確認測試本身沒寫錯數量")
+        XCTAssertEqual(cycle.count, 10, "10 地域循環（`21` §2 + 接手任務新增 hotspringVillage、mountainPalace），這裡先確認測試本身沒寫錯數量")
 
         // 走兩輪（16 個 band），確認每個 band 都落在預期地域、且能無縫接回第一輪。
         for round in 0..<2 {
@@ -44,8 +44,8 @@ final class RegionTests: XCTestCase {
 
     func testCyclesBackToFirstRegionAfterEightBands() {
         let length = Region.regionLength
-        XCTAssertEqual(Region.at(distance: length * 9), .meadowOrigin)
-        XCTAssertEqual(Region.at(distance: length * 18), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 10), .meadowOrigin)
+        XCTAssertEqual(Region.at(distance: length * 20), .meadowOrigin)
     }
 
     func testBandIndexMatchesFloorDivision() {

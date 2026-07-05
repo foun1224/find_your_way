@@ -31,6 +31,7 @@ final class RegionNpcScatterTests: XCTestCase {
             RegionNpcScatter.valleySlots,
             RegionNpcScatter.skySlots,
             RegionNpcScatter.hotspringVillageSlots,
+            RegionNpcScatter.mountainPalaceSlots,
         ]
         for table in tables {
             XCTAssertFalse(table.isEmpty)
@@ -81,6 +82,15 @@ final class RegionNpcScatterTests: XCTestCase {
         XCTAssertEqual(slots, RegionNpcScatter.hotspringVillageSlots)
     }
 
+    /// 接手任務：仙俠山宮配置學者/藥師/商人/旅人（沿用共享 `npc/` 資料夾裡最貼近「仙俠隱士」
+    /// 意象的既有角色，與天空地域共用同款人口組成但獨立排法）。
+    func testMountainPalaceGetsScholarApothecaryMerchantTraveler() {
+        let expectedNames: Set<String> = ["scholar", "apothecary", "merchant", "traveler"]
+        let slots = RegionNpcScatter.slots(for: .mountainPalace)
+        XCTAssertEqual(Set(slots.map(\.npcName)), expectedNames)
+        XCTAssertEqual(slots, RegionNpcScatter.mountainPalaceSlots)
+    }
+
     /// `21` §3：山谷配置藥師/學者/旅人。
     func testValleyGetsApothecaryScholarTraveler() {
         let expectedNames: Set<String> = ["apothecary", "scholar", "traveler"]
@@ -108,7 +118,7 @@ final class RegionNpcScatterTests: XCTestCase {
 
     /// 每個地域的槽位表沿街位置間距合理（比照現行王國槽位手法）：3~4 個槽位（`21` 任務要求）。
     func testEachConfiguredRegionHasThreeToFourSlots() {
-        for region: RegionType in [.meadowOrigin, .village2, .village3, .seaCity, .harbor, .hotspringVillage, .valley, .skyVillage, .skyCity] {
+        for region: RegionType in [.meadowOrigin, .village2, .village3, .seaCity, .harbor, .hotspringVillage, .valley, .skyVillage, .mountainPalace, .skyCity] {
             let count = RegionNpcScatter.slots(for: region).count
             XCTAssertTrue((3...5).contains(count), "\(region) 應有 3~5 個沿街槽位，實際 \(count)")
         }

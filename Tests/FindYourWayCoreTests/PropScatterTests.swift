@@ -137,6 +137,27 @@ final class PropScatterTests: XCTestCase {
         XCTAssertFalse(PropScatter.slots(for: .hotspringVillage).isEmpty, "溫泉山村已排進 9 地域循環，不該再是空槽位表")
     }
 
+    // MARK: - 仙俠山宮地域道具池（接手任務：hotspring 管線推廣到第三個 layered 地域）
+
+    func testMountainPalaceSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.mountainPalaceSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "仙俠山宮槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.mountainPalaceSlots.isEmpty, "仙俠山宮槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.mountainPalaceSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksMountainPalacePool() {
+        XCTAssertEqual(PropScatter.slots(for: .mountainPalace), PropScatter.mountainPalaceSlots)
+        XCTAssertFalse(PropScatter.slots(for: .mountainPalace).isEmpty, "仙俠山宮已排進 10 地域循環，不該再是空槽位表")
+    }
+
     // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）
 
     /// 逐一驗證 5 個新地域槽位表的基本不變量（同 `testKingdomSlotsAreWithinSpanAndSortedAndNonEmpty`/

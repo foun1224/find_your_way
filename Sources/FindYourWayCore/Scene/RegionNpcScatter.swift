@@ -90,6 +90,17 @@ public enum RegionNpcScatter {
         Slot(baseX: 760, npcName: "traveler"),
     ]
 
+    /// 仙俠山宮地域槽位表（接手任務：hotspring 管線推廣到第三個 layered 地域，`21` §3）：
+    /// 學者/藥師/商人/旅人——沿用共享 `npc/` 資料夾裡最貼近「仙俠隱士」意象的既有角色
+    /// （學者如問道求學的書生、藥師如採藥煉丹的方士），搭配商人/旅人維持人跡往來的氛圍，
+    /// 與 `skySlots`（天空村莊/天空魔法城）同款人口組成但獨立排法，銜接兩者之間的過渡感。
+    public static let mountainPalaceSlots: [Slot] = [
+        Slot(baseX: 90, npcName: "scholar"),
+        Slot(baseX: 330, npcName: "apothecary"),
+        Slot(baseX: 570, npcName: "merchant"),
+        Slot(baseX: 800, npcName: "traveler"),
+    ]
+
     /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
     /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
@@ -105,6 +116,8 @@ public enum RegionNpcScatter {
         case .harbor: return harborSlots
         // 溫泉山村（接手任務，harbor 管線推廣）：居民組成見 `hotspringVillageSlots`。
         case .hotspringVillage: return hotspringVillageSlots
+        // 仙俠山宮（接手任務，hotspring 管線推廣）：居民組成見 `mountainPalaceSlots`。
+        case .mountainPalace: return mountainPalaceSlots
         }
     }
 

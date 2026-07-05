@@ -52,6 +52,11 @@ HARBOR_SHEET = os.path.join(REPO_ROOT, "design", "harbor_test.png")
 # 4 層背景 + 底部道具列」佈局（而非 harbor 那張特例的 1086x1448 直式 5 帶），
 # 五個分區座標由 Read + 逐像素洋紅比例掃描校準（見 scratchpad 校準紀錄）。
 HOTSPRING_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "hotspring_village.png")
+# 第 5 波（接手任務：hotspring 管線推廣到第三個 layered 地域）：`design/mountain_palace.png`
+# （1536x1024，仙俠山宮/天界宮闕，版式與 hotspring_village 完全相同——遠景含天空不去背、
+# 中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。座標由 Read +
+# 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
+MOUNTAIN_PALACE_SHEET = os.path.join(REPO_ROOT, "design", "mountain_palace.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -1607,6 +1612,112 @@ def slice_hotspring_village_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 仙俠山宮（接手任務：hotspring 管線推廣到第三個 layered 地域，`design/mountain_palace.png`，
+# 1536x1024，由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄）。五帶 y 範圍：
+#   Far（天空+雲海+飄浮宮闕/山峰，不去背）：            y=0..275   （h=276）
+#   Mid（洋紅底四座山峰宮闕聚落，去背）：                y=276..495 （h=220）
+#   Fore（洋紅底牌坊拱門/仙鶴噴泉水晶座/涼亭，去背）：    y=496..729 （h=234；尾端切在
+#                                          內容實際結束處，不可再往下延伸到 y=730..787——
+#                                          那段除了純洋紅過渡留白外，還疊了「地面平台」
+#                                          標籤黑底方框，該方框不是洋紅色、去背後不會被
+#                                          清除，若切進來會在 Fore 圖層留下文字方框殘影）。
+#   Ground（石磚步道，不去背，只補頂緣洋紅缺口）：        y=788..847 （h=60，x=12..1523，
+#                                          左右各裁掉 12px——逐像素掃描發現 mid/fore/ground
+#                                          三帶在畫布最左/右緣各有一小段完全洋紅到底的留白欄，
+#                                          與 hotspring 同款問題，用同一組 12px inset 校準；
+#                                          「地面平台」標籤方框本身落在 y=745..775 的洋紅
+#                                          過渡帶內、不在 y=788 起的真實石磚範圍內，因此
+#                                          y 起點只需晚於過渡帶、不需要另外 patch 標籤方框，
+#                                          與 hotspring 做法一致）。
+#   Props（洋紅底道具列，去背）：                        y=850..1023（h=174）
+# 去背手法（`chroma_key_flood_color`+`remove_magenta_spill`+`strip_magenta_bleed_rows`+
+# `defringe_magenta_edges`／ground 用 `patch_magenta_columns`）完全沿用 hotspring 驗證過的
+# 管線，不發明新做法。
+# ---------------------------------------------------------------------------
+MOUNTAIN_PALACE_BG_FAR = Region(x=0, y=0, w=1536, h=276)
+MOUNTAIN_PALACE_BG_MID = Region(x=0, y=276, w=1536, h=220)
+MOUNTAIN_PALACE_BG_FORE = Region(x=0, y=496, w=1536, h=234)
+MOUNTAIN_PALACE_BG_GROUND = Region(x=12, y=788, w=1512, h=60)
+MOUNTAIN_PALACE_PROPS_REGION = Region(x=0, y=850, w=1536, h=174)
+
+# far/mid/fore/ground 四層左上角標籤黑底方框：版式與 hotspring 一致，沿用同一組座標
+# （四層左上角實際內容皆從 x≈130 起才開始）。
+MOUNTAIN_PALACE_LABEL_RECT = Region(x=0, y=0, w=130, h=48)
+# 道具列標籤方框位置與其餘四層不同（貼在道具列較下方），獨立一份座標，沿用 hotspring 校準值。
+MOUNTAIN_PALACE_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=44)
+
+# 道具列 11 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：仙鶴石像／石燈籠／仙字幡旗燈／寶塔石燈籠／盆栽奇石／
+# 漂浮水晶／香爐／石拱橋／瀑布奇石／石碑／山門小屋。範圍刻意留餘裕，去背 + autocrop
+# 後收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+MOUNTAIN_PALACE_PROP_REGIONS: dict = {
+    "crane_statue": Region(x=115, y=0, w=104, h=174),
+    "stone_lantern": Region(x=219, y=0, w=97, h=174),
+    "immortal_banner": Region(x=316, y=0, w=92, h=174),
+    "pagoda_lantern": Region(x=408, y=0, w=90, h=174),
+    "bonsai_rock": Region(x=498, y=0, w=147, h=174),
+    "crystal": Region(x=645, y=0, w=124, h=174),
+    "incense_burner": Region(x=769, y=0, w=120, h=174),
+    "stone_bridge": Region(x=889, y=0, w=211, h=174),
+    "waterfall_rock": Region(x=1100, y=0, w=144, h=174),
+    "stone_stele": Region(x=1244, y=0, w=116, h=174),
+    "shrine_gate": Region(x=1360, y=0, w=176, h=174),
+}
+# 細桿件/薄邊框（仙鶴細腳、幡旗燈桿、燈籠柱身、拱橋欄杆）用 `keep_largest_component_dilated`
+# 防斷（同 `_HOTSPRING_VILLAGE_DILATED_PROPS` 動機）；其餘本身較粗實的道具用
+# `remove_small_components` 保留分離部件。
+_MOUNTAIN_PALACE_DILATED_PROPS = {"crane_statue", "stone_lantern", "immortal_banner", "pagoda_lantern", "stone_bridge"}
+
+
+def slice_mountain_palace_bg(sheet: Image) -> dict:
+    """仙俠山宮背景切圖：手法與 `slice_hotspring_village_bg` 完全一致（far 不去背當 backdrop +
+    水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(MOUNTAIN_PALACE_BG_FAR.x, MOUNTAIN_PALACE_BG_FAR.y, MOUNTAIN_PALACE_BG_FAR.w, MOUNTAIN_PALACE_BG_FAR.h),
+        MOUNTAIN_PALACE_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(MOUNTAIN_PALACE_BG_MID.x, MOUNTAIN_PALACE_BG_MID.y, MOUNTAIN_PALACE_BG_MID.w, MOUNTAIN_PALACE_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, MOUNTAIN_PALACE_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(MOUNTAIN_PALACE_BG_FORE.x, MOUNTAIN_PALACE_BG_FORE.y, MOUNTAIN_PALACE_BG_FORE.w, MOUNTAIN_PALACE_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, MOUNTAIN_PALACE_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `MOUNTAIN_PALACE_BG_GROUND` 校準說明）已經避開「地面平台」標籤方框
+    # 所在的 y 範圍，不需要（也不能）再套 `patch_label_box`——標籤方框已經不在這個裁切區內，
+    # 若誤套會把裁切框左上角的真實石磚內容覆蓋成重複色塊。
+    ground_raw = sheet.crop(MOUNTAIN_PALACE_BG_GROUND.x, MOUNTAIN_PALACE_BG_GROUND.y, MOUNTAIN_PALACE_BG_GROUND.w, MOUNTAIN_PALACE_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_mountain_palace_props(sheet: Image) -> dict:
+    """仙俠山宮道具列切圖：手法與 `slice_hotspring_village_props` 完全一致（先蓋掉整條道具列的
+    標籤方框，再逐一裁切去背 + 依 `_MOUNTAIN_PALACE_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = MOUNTAIN_PALACE_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, MOUNTAIN_PALACE_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in MOUNTAIN_PALACE_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _MOUNTAIN_PALACE_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -2044,6 +2155,27 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {HOTSPRING_VILLAGE_SHEET} not found, skipping hotspring_village region slicing")
+
+    # --- 仙俠山宮（接手任務：hotspring 管線推廣，`design/mountain_palace.png`）：排進 10
+    # 地域循環（取代原 9 地域循環，`RegionType.layeredRegions`/`cycle`），`FYW_DEBUG_REGION=
+    # mountain_palace` 可直接截圖驗收。---
+    if os.path.exists(MOUNTAIN_PALACE_SHEET):
+        mountain_palace_sheet = decode_png(MOUNTAIN_PALACE_SHEET)
+        print(f"mountain_palace_sheet: {mountain_palace_sheet.width}x{mountain_palace_sheet.height}")
+
+        mountain_palace_bg_dir = os.path.join(OUT_ROOT, "regions", "mountain_palace", "bg")
+        for name, img in slice_mountain_palace_bg(mountain_palace_sheet).items():
+            out_path = os.path.join(mountain_palace_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        mountain_palace_props_dir = os.path.join(OUT_ROOT, "regions", "mountain_palace", "props")
+        for name, img in slice_mountain_palace_props(mountain_palace_sheet).items():
+            out_path = os.path.join(mountain_palace_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {MOUNTAIN_PALACE_SHEET} not found, skipping mountain_palace region slicing")
 
 
 def inspect(sheet: Image) -> None:
