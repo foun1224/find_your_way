@@ -176,6 +176,18 @@ public enum PropScatter {
         Slot(baseX: 520, propName: "planter"),
     ]
 
+    /// 溫泉山村地域槽位表（接手任務：harbor 管線推廣到第二個 layered 地域，`21` §2/§4）：
+    /// 道具池換成 `regions/hotspring_village/props/` 切出的日式溫泉山村道具（櫻花樹/石燈籠/
+    /// 溫泉旗幡/岩石噴泉等），間距手法同 `harborSlots`（確定性、依 `baseX` 遞增排列）。
+    public static let hotspringVillageSlots: [Slot] = [
+        Slot(baseX: 40, propName: "cherry_tree"),
+        Slot(baseX: 130, propName: "stone_lantern"),
+        Slot(baseX: 220, propName: "signpost"),
+        Slot(baseX: 310, propName: "onsen_banner"),
+        Slot(baseX: 400, propName: "hotspring_rock"),
+        Slot(baseX: 490, propName: "market_stall"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -188,9 +200,10 @@ public enum PropScatter {
         case .village3: return village3Slots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots
-        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進 8 地域循環）：
-        // 道具池見 `harborSlots`。
+        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進循環）：道具池見 `harborSlots`。
         case .harbor: return harborSlots
+        // 溫泉山村（接手任務，harbor 管線推廣）：道具池見 `hotspringVillageSlots`。
+        case .hotspringVillage: return hotspringVillageSlots
         }
     }
 

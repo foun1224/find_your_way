@@ -45,6 +45,13 @@ NPC_2_SHEET = os.path.join(REPO_ROOT, "design", "npc_2.png")
 # mid/fore/道具都畫在洋紅 `#FF00FF` 底上，可去背後疊出真正的多層視差（取代先前「只渲染
 # far」的過渡 workaround）。harbor 目前只是驗證用地域，不排進 8 地域循環（見 `RegionType`）。
 HARBOR_SHEET = os.path.join(REPO_ROOT, "design", "harbor_test.png")
+# 第 4 波（接手任務：把 harbor 驗證過的「洋紅去背 + 真多層視差」管線推廣到第二個 layered
+# 地域）：`design/hotspring_village.png`（1536x1024，日式溫泉山村，遠景含天空不去背、
+# 中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。座標表/去背
+# 流程與 harbor 完全同款手法，只是版式改回跟其餘 8 地域素材表一樣的「橫式 1536x1024、
+# 4 層背景 + 底部道具列」佈局（而非 harbor 那張特例的 1086x1448 直式 5 帶），
+# 五個分區座標由 Read + 逐像素洋紅比例掃描校準（見 scratchpad 校準紀錄）。
+HOTSPRING_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "hotspring_village.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -1490,6 +1497,116 @@ def slice_harbor_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 溫泉山村（接手任務：harbor 管線推廣到第二個 layered 地域，`design/hotspring_village.png`，
+# 1536x1024，由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄）。五帶 y 範圍：
+#   Far（含天空+雪山+遠方城堡，不去背）：      y=0..279   （h=280）
+#   Mid（洋紅底村莊聚落，去背）：              y=280..494 （h=215）
+#   Fore（洋紅底溫泉旅館/拱橋/招牌，去背）：    y=495..743 （h=249）
+#   Ground（石磚步道，不去背，只補頂緣洋紅缺口）：y=814..858 （h=45，x=12..1523，
+#                                          左右各裁掉 12px——逐像素掃描發現 mid/fore/ground
+#                                          三帶在畫布最左/右緣各有約 10px 完全沒有內容、
+#                                          整欄純洋紅到底（不是「頂緣殘留」而是畫布留白邊界），
+#                                          `patch_magenta_columns` 逐欄用「同欄最近的非洋紅
+#                                          像素」補洞，若整欄從上到下都是洋紅就無法自癒、
+#                                          會在地面平台留下貫穿全高的洋紅色縱線；y 起點同理
+#                                          需晚於「地面平台」標籤方框 + 石磚頂緣尚未長滿雜草
+#                                          的過渡帶（y=744..813 多數欄仍大半是洋紅，逐欄補洞
+#                                          會把附近抗鋸齒的淡粉像素往上拉成一整條色塊），
+#                                          兩者都往內收到「幾乎每一欄在裁切範圍內都已有真實
+#                                          內容」的高度，逐像素洋紅比例掃描 + 目視反覆試裁
+#                                          校準出 x=12..1523／y=814..858 為零殘留的最小安全框）。
+#   Props（洋紅底道具列，去背）：              y=860..1023（h=164）
+# 與 harbor 差異只在版式（橫式 4 層+底部道具列，同其餘 8 地域素材表版式，而非 harbor 那張
+# 特例的直式 5 帶獨立畫布）；去背手法（`chroma_key_flood_color`+`remove_magenta_spill`+
+# `strip_magenta_bleed_rows`+`defringe_magenta_edges`／ground 用 `patch_magenta_columns`）
+# 完全沿用 harbor 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+HOTSPRING_VILLAGE_BG_FAR = Region(x=0, y=0, w=1536, h=280)
+HOTSPRING_VILLAGE_BG_MID = Region(x=0, y=280, w=1536, h=215)
+HOTSPRING_VILLAGE_BG_FORE = Region(x=0, y=495, w=1536, h=249)
+HOTSPRING_VILLAGE_BG_GROUND = Region(x=12, y=814, w=1512, h=45)
+HOTSPRING_VILLAGE_PROPS_REGION = Region(x=0, y=860, w=1536, h=164)
+
+# far/mid/fore/ground 四層左上角標籤黑底方框（逐像素掃描校準：方框約 x=0..125、y=5..47，
+# 四層版式一致，沿用同一份座標，留餘裕不裁到內容——四層左上角實際內容皆從 x≈135 起才開始）。
+HOTSPRING_VILLAGE_LABEL_RECT = Region(x=0, y=0, w=130, h=48)
+# 道具列標籤方框位置與其餘四層不同（貼在道具列較下方，逐像素掃描校準：約 x=0..135、
+# y=10..50），獨立一份座標。
+HOTSPRING_VILLAGE_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=44)
+
+# 道具列 12 個道具座標（逐像素欄投影分段掃描 + 目視命名校準，見 scratchpad 校準紀錄，順序
+# 由左到右）：櫻花樹／石燈籠／木牌路標／木箱／木桶／花箱／溫泉旗幡／石燈籠（矮）／
+# 溫泉岩石噴泉／長椅／市集攤棚／柵欄。範圍刻意留餘裕，去背 + autocrop 後收斂到精確
+# bounding box；相鄰槽位的餘裕重疊落在洋紅留白（實際內容間距 ≥20px），不會誤裁鄰居。
+HOTSPRING_VILLAGE_PROP_REGIONS: dict = {
+    "cherry_tree": Region(x=115, y=0, w=155, h=164),
+    "stone_lantern": Region(x=260, y=0, w=75, h=164),
+    "signpost": Region(x=325, y=0, w=105, h=164),
+    "crate": Region(x=430, y=0, w=105, h=164),
+    "barrel": Region(x=532, y=0, w=105, h=164),
+    "planter": Region(x=635, y=0, w=120, h=164),
+    "onsen_banner": Region(x=760, y=0, w=100, h=164),
+    "lantern_stone": Region(x=872, y=0, w=90, h=164),
+    "hotspring_rock": Region(x=962, y=0, w=135, h=164),
+    "bench": Region(x=1095, y=0, w=125, h=164),
+    "market_stall": Region(x=1220, y=0, w=180, h=164),
+    "fence": Region(x=1390, y=0, w=146, h=164),
+}
+# 細桿件/薄邊框（路標柱、旗幡桿、石燈籠柱身、柵欄橫木）用 `keep_largest_component_dilated`
+# 防斷（同 `_HARBOR_DILATED_PROPS` 動機）；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件（例如市集攤棚的棚頂+攤台是兩個分離區塊）。
+_HOTSPRING_VILLAGE_DILATED_PROPS = {"signpost", "onsen_banner", "stone_lantern", "lantern_stone", "fence"}
+
+
+def slice_hotspring_village_bg(sheet: Image) -> dict:
+    """溫泉山村背景切圖：手法與 `slice_harbor_bg` 完全一致（far 不去背當 backdrop + 水平無縫
+    羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(HOTSPRING_VILLAGE_BG_FAR.x, HOTSPRING_VILLAGE_BG_FAR.y, HOTSPRING_VILLAGE_BG_FAR.w, HOTSPRING_VILLAGE_BG_FAR.h),
+        HOTSPRING_VILLAGE_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(HOTSPRING_VILLAGE_BG_MID.x, HOTSPRING_VILLAGE_BG_MID.y, HOTSPRING_VILLAGE_BG_MID.w, HOTSPRING_VILLAGE_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, HOTSPRING_VILLAGE_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(HOTSPRING_VILLAGE_BG_FORE.x, HOTSPRING_VILLAGE_BG_FORE.y, HOTSPRING_VILLAGE_BG_FORE.w, HOTSPRING_VILLAGE_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, HOTSPRING_VILLAGE_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `HOTSPRING_VILLAGE_BG_GROUND` 校準說明）已經避開「地面平台」標籤方框
+    # 所在的 y 範圍，不需要（也不能）再套 `patch_label_box`——標籤方框已經不在這個裁切區內，
+    # 若誤套會把裁切框左上角的真實石磚內容覆蓋成重複色塊。
+    ground_raw = sheet.crop(HOTSPRING_VILLAGE_BG_GROUND.x, HOTSPRING_VILLAGE_BG_GROUND.y, HOTSPRING_VILLAGE_BG_GROUND.w, HOTSPRING_VILLAGE_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_hotspring_village_props(sheet: Image) -> dict:
+    """溫泉山村道具列切圖：手法與 `slice_harbor_props` 完全一致（先蓋掉整條道具列的標籤方框，
+    再逐一裁切去背 + 依 `_HOTSPRING_VILLAGE_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = HOTSPRING_VILLAGE_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, HOTSPRING_VILLAGE_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in HOTSPRING_VILLAGE_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _HOTSPRING_VILLAGE_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -1906,6 +2023,27 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {HARBOR_SHEET} not found, skipping harbor region slicing")
+
+    # --- 溫泉山村（接手任務：harbor 管線推廣，`design/hotspring_village.png`）：排進 9 地域
+    # 循環（取代原 8 地域循環，`RegionType.layeredRegions`/`cycle`），`FYW_DEBUG_REGION=
+    # hotspring_village` 可直接截圖驗收。---
+    if os.path.exists(HOTSPRING_VILLAGE_SHEET):
+        hotspring_sheet = decode_png(HOTSPRING_VILLAGE_SHEET)
+        print(f"hotspring_village_sheet: {hotspring_sheet.width}x{hotspring_sheet.height}")
+
+        hotspring_bg_dir = os.path.join(OUT_ROOT, "regions", "hotspring_village", "bg")
+        for name, img in slice_hotspring_village_bg(hotspring_sheet).items():
+            out_path = os.path.join(hotspring_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        hotspring_props_dir = os.path.join(OUT_ROOT, "regions", "hotspring_village", "props")
+        for name, img in slice_hotspring_village_props(hotspring_sheet).items():
+            out_path = os.path.join(hotspring_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {HOTSPRING_VILLAGE_SHEET} not found, skipping hotspring_village region slicing")
 
 
 def inspect(sheet: Image) -> None:

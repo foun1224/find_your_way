@@ -80,6 +80,16 @@ public enum RegionNpcScatter {
         Slot(baseX: 600, npcName: "musician"),
     ]
 
+    /// 溫泉山村地域槽位表（接手任務：harbor 管線推廣到第二個 layered 地域，`21` §3）：
+    /// 農夫/商人/旅人/藥師——山村往來的日常人口，混合田園（農夫）與旅途（商人/旅人）氛圍，
+    /// 藥師呼應溫泉療養的意象。
+    public static let hotspringVillageSlots: [Slot] = [
+        Slot(baseX: 70, npcName: "farmer"),
+        Slot(baseX: 300, npcName: "apothecary"),
+        Slot(baseX: 530, npcName: "merchant"),
+        Slot(baseX: 760, npcName: "traveler"),
+    ]
+
     /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
     /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
@@ -91,9 +101,10 @@ public enum RegionNpcScatter {
         case .valley: return valleySlots
         case .skyVillage, .skyCity: return skySlots
         case .riverlands, .highlands, .coastalReach: return []
-        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進 8 地域循環）：
-        // 居民組成見 `harborSlots`。
+        // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進循環）：居民組成見 `harborSlots`。
         case .harbor: return harborSlots
+        // 溫泉山村（接手任務，harbor 管線推廣）：居民組成見 `hotspringVillageSlots`。
+        case .hotspringVillage: return hotspringVillageSlots
         }
     }
 

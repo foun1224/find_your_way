@@ -113,7 +113,28 @@ final class PropScatterTests: XCTestCase {
 
     func testSlotsForRegionPicksHarborPool() {
         XCTAssertEqual(PropScatter.slots(for: .harbor), PropScatter.harborSlots)
-        XCTAssertFalse(PropScatter.slots(for: .harbor).isEmpty, "海港已排進 8 地域循環，不該再是空槽位表")
+        XCTAssertFalse(PropScatter.slots(for: .harbor).isEmpty, "海港已排進 9 地域循環，不該再是空槽位表")
+    }
+
+    // MARK: - 溫泉山村地域道具池（接手任務：harbor 管線推廣到第二個 layered 地域）
+
+    func testHotspringVillageSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.hotspringVillageSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "溫泉山村槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.hotspringVillageSlots.isEmpty, "溫泉山村槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.hotspringVillageSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksHotspringVillagePool() {
+        XCTAssertEqual(PropScatter.slots(for: .hotspringVillage), PropScatter.hotspringVillageSlots)
+        XCTAssertFalse(PropScatter.slots(for: .hotspringVillage).isEmpty, "溫泉山村已排進 9 地域循環，不該再是空槽位表")
     }
 
     // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）

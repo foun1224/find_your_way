@@ -29,17 +29,22 @@ public enum RegionType: Equatable, CaseIterable {
     case skyCity
     /// 海港（`design/harbor_test.png`，`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」
     /// 美術流程驗證地域，已驗證通過）：只有遠景含天空，中景/前景/道具皆洋紅底去背成透明，
-    /// 疊出真正的多層視差（`isLayered`）。取代 `seaCity` 排進 8 地域循環（`cycle`）。
+    /// 疊出真正的多層視差（`isLayered`）。取代 `seaCity` 排進循環（`cycle`）。
     case harbor
+    /// 溫泉山村（`design/hotspring_village.png`，接手任務：把 harbor 驗證過的「洋紅去背 +
+    /// 真多層視差」管線推廣到第二個 layered 地域）：日式溫泉山村，遠景含天空、中景/前景/
+    /// 道具皆洋紅底去背成透明（`isLayered`），地面平台不去背。排進循環，銜接村莊 B 與海港
+    /// 之間（森林村落 → 溫泉山村 → 海港，山村↔山谷↔海港的地形過渡自然）。
+    case hotspringVillage
 
-    /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity）：8 地域循環，
-    /// 旅程節奏由近人到奇幻——
-    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 海港 → 天空村莊 → 天空魔法城 → （回到草原）。
-    /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。
+    /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
+    /// hotspringVillage）：9 地域循環，旅程節奏由近人到奇幻——
+    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 溫泉山村 → 海港 → 天空村莊 → 天空魔法城 →
+    /// （回到草原）。`seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。
     /// 其餘骨架 case（riverlands/highlands/coastalReach）保留給未來地域，暫不進入
     /// `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .harbor, .skyVillage, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .skyVillage, .skyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -69,6 +74,7 @@ public enum RegionType: Equatable, CaseIterable {
         case .skyVillage: return "sky_village"
         case .skyCity: return "sky_city"
         case .harbor: return "harbor"
+        case .hotspringVillage: return "hotspring_village"
         }
     }
 
@@ -76,8 +82,8 @@ public enum RegionType: Equatable, CaseIterable {
     /// mid/fore 素材是**透明去背過的獨立物件層**（非各自含天空的完整場景），
     /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
     /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
-    /// far+ground」的過渡 workaround。目前只有 `harbor`（已排進 8 地域循環）。
-    private static let layeredRegions: Set<RegionType> = [.harbor]
+    /// far+ground」的過渡 workaround。目前有 `harbor`/`hotspringVillage`（皆已排進循環）。
+    private static let layeredRegions: Set<RegionType> = [.harbor, .hotspringVillage]
 
     /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。
     public var isLayered: Bool { RegionType.layeredRegions.contains(self) }
