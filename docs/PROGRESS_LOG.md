@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-05 — Session 2 — 地域大擴充：新提示詞 6 地域 → 15 地域循環
+
+承新美術流程（洋紅去背 + 真多層視差 layered），使用者陸續用 `docs/20` §8A 新提示詞（磁紅 mid/fore、只有遠景含天空且需可無縫循環）重生一批地域，分享連結逐張下載驗證整合。每張皆「機械整合委派 Sonnet subagent 照前一個 layered 地域模板做 → 我親自雙鏡截圖驗收（`FYW_DEBUG_REGION` + crop.py 全螢幕裁切）」。
+
+**本 session 新增 6 個 layered 地域（皆零洋紅、雙鏡通過、各自 commit）**：
+- hotspring_village 溫泉村（日式暖夕陽）、snow_mountain 雪山石門（歐系中世紀奇幻，14_STORYLINE 地標）、mountain_palace 仙俠山宮（東方奇幻天空仙境）、magic_city 浮空魔法都城（高奇幻空靈）、holy_city 神聖城市（聖光聖域）、steampunk_city 蒸氣龐克飛船城（暖黃銅工業）、future_city 賽博龐克霓虹夜城（喚醒度最高）。
+
+**調性決策**：使用者先選「維持 A（中世紀奇幻一致）」跳過 steampunk/future，隨後改口「工業龐克可以」「賽博也要」→ 最終 **genre 全開**。排序讓兩座熱鬧科技城（steampunk→future）相鄰、後段空靈聖域（mountainPalace→magicCity→holyCity→skyCity）保持 calm crescendo 收尾。
+
+**15 地域循環**：`meadowOrigin → village2 → valley → kingdom → village3 → hotspringVillage → harbor → snowMountain → steampunkCity → futureCity → skyVillage → mountainPalace → magicCity → holyCity → skyCity ↺`
+
+**順帶修 bug**：`GameScene.debugRegionOverride()` switch 漏了新地域 → `FYW_DEBUG_REGION` 落回預設地域（截圖驗收才抓到）。已補齊全部新地域 case。
+
+**技術注記**：future_city 美術調色盤本身含洋紅粉紫霓虹，靠 `chroma_key_flood_color` 從邊緣 flood-fill 只去背景相連洋紅、不吃內部霓虹（threshold=60 保留）；逐張黑白合成目視確認招牌無破洞。
+
+- 測試 **329/329 綠**。
+**待使用者**：15 地域 GUI 實走體感；future_city 喚醒度最高，若實際打擾可加 always-night/降 bloom/降飽和專屬處理（已留備註）；mountain_palace 仙俠味若覺出戲可拉掉。舊格式殘留地域（若有）續汰換。
+
+---
+
 ## 2026-07-05 — 陪伴弧 P1–P4（準則一核心）+ 雙鏡工作法 + 美術新流程
 
 **工作法定調（記憶 [[dual-lens-review-policy]]）**：每次產出都過「心理學(Fable)×design-engineer(Emil review-animations 技能,`.agents/`)」雙鏡、實際看不嘴上說。衝突時心理學/非侵入優先。
