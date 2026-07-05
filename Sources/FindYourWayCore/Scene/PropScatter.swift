@@ -247,16 +247,46 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "cross_shrine"),
     ]
 
+    /// 王國首都地域槽位表（接手任務：`RegionType.kingdom` 重新指回 layered 美術，`21` §2/§4，
+    /// meadow_village/holy_city 管線推廣）：道具池換成 `regions/kingdom_city/props/` 切出的
+    /// 歐式白金王國首都道具（紋章旗幟/花卉甕/盆栽柏樹/告示牌/石柱等），間距手法同
+    /// `holyCitySlots`（確定性、依 `baseX` 遞增排列）。取代舊 `kingdomSlots`
+    /// （對應舊 `"kingdom"` 單張背景的道具池，已停用、原樣保留供未來重啟參考）。
+    public static let kingdomCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "heraldic_banner"),
+        Slot(baseX: 130, propName: "lamp_post"),
+        Slot(baseX: 220, propName: "flower_urn"),
+        Slot(baseX: 310, propName: "cypress"),
+        Slot(baseX: 400, propName: "stone_bench"),
+        Slot(baseX: 490, propName: "notice_board"),
+    ]
+
+    /// 森林樹屋村落地域槽位表（接手任務：`RegionType.village3` 重新指回 layered 美術，
+    /// `21` §2/§4，meadow_village/holy_city 管線推廣）：道具池換成 `regions/tree_village/props/`
+    /// 切出的森林樹屋村落道具（旗幡/花卉推車/曬衣繩/圓形徽章告示/拱門等），間距手法同
+    /// `holyCitySlots`（確定性、依 `baseX` 遞增排列）。取代舊 `village3Slots`
+    /// （對應舊 `"village_3"` 單張背景的道具池，已停用、原樣保留供未來重啟參考）。
+    public static let treeVillageSlots: [Slot] = [
+        Slot(baseX: 40, propName: "lamp_post"),
+        Slot(baseX: 130, propName: "banner"),
+        Slot(baseX: 220, propName: "flower_cart"),
+        Slot(baseX: 310, propName: "laundry_line"),
+        Slot(baseX: 400, propName: "round_sign"),
+        Slot(baseX: 490, propName: "arch_gate"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
         switch region {
-        case .kingdom: return kingdomSlots
+        // 王國首都（接手任務，重新指回 layered 美術）：道具池見 `kingdomCitySlots`。
+        case .kingdom: return kingdomCitySlots
         case .seaCity: return seaCitySlots
         // 中世紀奇幻村莊（接手任務，重新指回 layered 美術，開場地域）：道具池見 `meadowVillageSlots`。
         case .meadowOrigin: return meadowVillageSlots
         case .riverlands, .highlands, .coastalReach: return slots
-        case .village3: return village3Slots
+        // 森林樹屋村落（接手任務，重新指回 layered 美術）：道具池見 `treeVillageSlots`。
+        case .village3: return treeVillageSlots
         case .skyVillage: return skyVillageSlots
         case .skyCity: return skyCitySlots
         // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進循環）：道具池見 `harborSlots`。

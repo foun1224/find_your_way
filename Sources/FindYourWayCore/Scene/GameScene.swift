@@ -263,9 +263,13 @@ public final class GameScene: SKScene {
         // 中世紀奇幻村莊（接手任務：`meadowOrigin` 重新指回 layered 美術 `"meadow_village"`，
         // 排回循環最前面當開場地域）：新舊資源夾名稱皆接受，方便截圖驗收。
         case "meadow", "grassland", "meadow_village", "meadowvillage": return .meadowOrigin
-        case "kingdom": return .kingdom
+        // 王國首都（接手任務：`kingdom` 重新指回 layered 美術 `"kingdom_city"`）：新舊
+        // 資源夾名稱皆接受，方便截圖驗收。
+        case "kingdom", "kingdom_city", "kingdomcity": return .kingdom
         case "sea_city", "seacity": return .seaCity
-        case "village_3", "village3": return .village3
+        // 森林樹屋村落（接手任務：`village3` 重新指回 layered 美術 `"tree_village"`）：新舊
+        // 資源夾名稱皆接受，方便截圖驗收。
+        case "village_3", "village3", "tree_village", "treevillage": return .village3
         case "sky_village", "skyvillage": return .skyVillage
         case "sky_city", "skycity", "sky_city_magic": return .skyCity
         // 海港（`20_ASSET_SHEET_SPEC.md` §8A「洋紅去背 + 真多層視差」美術流程驗證地域，

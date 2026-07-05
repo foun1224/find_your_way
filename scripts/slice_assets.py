@@ -102,6 +102,18 @@ FUTURE_CITY_SHEET = os.path.join(REPO_ROOT, "design", "future_city.png")
 # 見 scratchpad 校準紀錄。取代 meadowOrigin 舊版單張背景（`grassland`），讓開場地域也是
 # layered 格式，角色不再有浮空違和感。
 MEADOW_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "village_layered.png")
+# 接手任務（2026-07-05）：把 `kingdom`/`village3` 這兩個休眠中的「舊單 backdrop」地域
+# 重新指到新的 layered 格式美術，重新排回循環（`meadowOrigin` 重排回循環的同一手法，
+# `21` §2/§4 holy_city/meadow_village 管線原樣複製）：`design/city_layered_1.png`（歐式
+# 白金王國首都：尖塔/拱橋/雪山遠景/天使雕像/紋章大門/華麗宅邸/噴泉）→ `RegionType.kingdom`
+# 新資源夾 `"kingdom_city"`；`design/village3_layered.png`（森林樹屋村落：巨木/樹屋/繩橋/
+# 瀑布/苔蘚屋頂農舍/市集攤位）→ `RegionType.village3` 新資源夾 `"tree_village"`。皆
+# 1536x1024，版式與 meadow_village/holy_city 完全相同——遠景含天空不去背、中景/前景/道具
+# 皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口。座標由 Read + 逐像素洋紅比例
+# 掃描校準，見 scratchpad 校準紀錄（兩張圖的 Mid/Fore、Ground 邊界與 meadow_village 略有
+# 出入，各自獨立校準，不共用同一組座標）。
+KINGDOM_CITY_SHEET = os.path.join(REPO_ROOT, "design", "city_layered_1.png")
+TREE_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "village3_layered.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -2525,6 +2537,193 @@ def slice_meadow_village_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 接手任務（2026-07-05）：`kingdom`/`village3` 重新指回 layered 美術，`21` §2/§4，
+# meadow_village/holy_city 管線原樣複製。座標校準紀錄（Read + 逐像素洋紅比例掃描）：
+#   Far（不去背，當完整 backdrop）：                        y=0..273（h=274，與 meadow_village 相同）
+#   Mid（洋紅底，去背成透明中景）：                          y=274..501（h=228，比 meadow_village
+#                                          的 221 略高——`village3_layered.png` 本身
+#                                          Mid/Fore 分界略往下，逐像素校準得出）
+#   Fore（洋紅底，去背成透明前景）：                         y=502..747（h=246）
+#   Ground（不去背，只補頂緣洋紅缺口，12px inset 避開                y=792..855（h=64，128px inset 校準；
+#     「地面平台」標籤方框，見下方 city 版本的另一組數字）：              855 是磚紋實際內容開始處）
+#   Props（洋紅底道具列，去背）：                           y=856..1023（h=168）
+# `city_layered_1.png` 的 Mid/Fore/Ground 邊界與上面的 village3 版本不同（各自獨立掃描
+# 校準，未套用同一組數字）：
+#   Far：  y=0..273（h=274）
+#   Mid：  y=274..494（h=221，與 meadow_village 相同）
+#   Fore： y=495..747（h=253，與 meadow_village 相同）
+#   Ground：y=788..851（h=64，與 meadow_village 相同，12px inset）
+#   Props：y=852..1023（h=172，與 meadow_village 相同）
+# 兩張圖的 Fore/Ground 之間都留了 40px 上下的「地面平台」標籤方框 + 洋紅留白（748..788
+# 或 748..792），刻意不裁進 Fore（避免 meadow_village 曾踩過的 navy-artifact bug：Fore
+# 只去背不補標籤方框，方框留在 Fore 裡會變實心色塊）也不裁進 Ground（Ground 起點就是
+# 磚紋內容真正開始處），完全跳過。
+# 去背手法完全沿用 holy_city/meadow_village 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+KINGDOM_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=274)
+KINGDOM_CITY_BG_MID = Region(x=0, y=274, w=1536, h=221)
+KINGDOM_CITY_BG_FORE = Region(x=0, y=495, w=1536, h=253)
+KINGDOM_CITY_BG_GROUND = Region(x=12, y=788, w=1512, h=64)
+KINGDOM_CITY_PROPS_REGION = Region(x=0, y=852, w=1536, h=172)
+
+KINGDOM_CITY_LABEL_RECT = Region(x=0, y=0, w=120, h=50)
+KINGDOM_CITY_PROPS_LABEL_RECT = Region(x=0, y=0, w=140, h=48)
+
+# 道具列 12 個道具座標（逐欄「非洋紅像素密度」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：石環底座大樹／街燈／紋章旗幟／花卉甕／盆栽柏樹／木箱／
+# 木桶／花圃木箱／石長椅／市集攤位（洋紅密度連續無內部空隙，確認是單一寬道具，非兩件
+# 相鄰）／告示牌／石柱。範圍刻意留餘裕，去背 + autocrop 後收斂到精確 bounding box；
+# 相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+KINGDOM_CITY_PROP_REGIONS: dict = {
+    "tree": Region(x=95, y=0, w=125, h=172),
+    "lamp_post": Region(x=220, y=0, w=84, h=172),
+    "heraldic_banner": Region(x=304, y=0, w=88, h=172),
+    "flower_urn": Region(x=392, y=0, w=104, h=172),
+    "cypress": Region(x=496, y=0, w=76, h=172),
+    "crate": Region(x=572, y=0, w=124, h=172),
+    "barrel": Region(x=696, y=0, w=84, h=172),
+    "flower_box": Region(x=780, y=0, w=124, h=172),
+    "stone_bench": Region(x=904, y=0, w=144, h=172),
+    "market_stall": Region(x=1048, y=0, w=212, h=172),
+    "notice_board": Region(x=1260, y=0, w=130, h=172),
+    "pillar": Region(x=1390, y=0, w=146, h=172),
+}
+# 細桿件/薄邊框（路燈燈柱+燈臂、紋章旗幟細桿）用 `keep_largest_component_dilated` 防斷；
+# 其餘本身較粗實的道具用 `remove_small_components` 保留分離部件。
+_KINGDOM_CITY_DILATED_PROPS = {"lamp_post", "heraldic_banner"}
+
+
+def slice_kingdom_city_bg(sheet: Image) -> dict:
+    """歐式白金王國首都背景切圖：手法與 `slice_meadow_village_bg`/`slice_holy_city_bg` 完全
+    一致（far 不去背當 backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；
+    ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box_sky(
+        sheet.crop(KINGDOM_CITY_BG_FAR.x, KINGDOM_CITY_BG_FAR.y, KINGDOM_CITY_BG_FAR.w, KINGDOM_CITY_BG_FAR.h),
+        KINGDOM_CITY_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(KINGDOM_CITY_BG_MID.x, KINGDOM_CITY_BG_MID.y, KINGDOM_CITY_BG_MID.w, KINGDOM_CITY_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, KINGDOM_CITY_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(KINGDOM_CITY_BG_FORE.x, KINGDOM_CITY_BG_FORE.y, KINGDOM_CITY_BG_FORE.w, KINGDOM_CITY_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, KINGDOM_CITY_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見上方校準說明）已經避開「地面平台」標籤方框所在的 y 範圍，不需要
+    # （也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(KINGDOM_CITY_BG_GROUND.x, KINGDOM_CITY_BG_GROUND.y, KINGDOM_CITY_BG_GROUND.w, KINGDOM_CITY_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_kingdom_city_props(sheet: Image) -> dict:
+    """歐式白金王國首都道具列切圖：手法與 `slice_meadow_village_props`/`slice_holy_city_props`
+    完全一致（先蓋掉整條道具列的標籤方框，再逐一裁切去背 + 依 `_KINGDOM_CITY_DILATED_PROPS`
+    選細桿件保護）。
+    """
+    region = KINGDOM_CITY_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, KINGDOM_CITY_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in KINGDOM_CITY_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _KINGDOM_CITY_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+TREE_VILLAGE_BG_FAR = Region(x=0, y=0, w=1536, h=274)
+TREE_VILLAGE_BG_MID = Region(x=0, y=274, w=1536, h=228)
+TREE_VILLAGE_BG_FORE = Region(x=0, y=502, w=1536, h=246)
+TREE_VILLAGE_BG_GROUND = Region(x=12, y=792, w=1512, h=64)
+TREE_VILLAGE_PROPS_REGION = Region(x=0, y=856, w=1536, h=168)
+
+TREE_VILLAGE_LABEL_RECT = Region(x=0, y=0, w=120, h=50)
+TREE_VILLAGE_PROPS_LABEL_RECT = Region(x=0, y=0, w=140, h=48)
+
+# 道具列 11 個道具座標（逐欄「非洋紅像素密度」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：路燈／旗幡／指路牌／盆栽樹／花卉推車／木桶／花卉篷車／
+# 曬衣繩／告示牌／圓形徽章告示／拱門（藤蔓花飾）。範圍刻意留餘裕，去背 + autocrop 後
+# 收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+TREE_VILLAGE_PROP_REGIONS: dict = {
+    "lamp_post": Region(x=90, y=0, w=117, h=168),
+    "banner": Region(x=207, y=0, w=101, h=168),
+    "signpost": Region(x=308, y=0, w=103, h=168),
+    "potted_tree": Region(x=411, y=0, w=101, h=168),
+    "flower_cart": Region(x=512, y=0, w=116, h=168),
+    "barrel": Region(x=628, y=0, w=95, h=168),
+    "flower_wagon": Region(x=723, y=0, w=155, h=168),
+    "laundry_line": Region(x=878, y=0, w=178, h=168),
+    "notice_board": Region(x=1056, y=0, w=151, h=168),
+    "round_sign": Region(x=1207, y=0, w=94, h=168),
+    "arch_gate": Region(x=1301, y=0, w=172, h=168),
+}
+# 細桿件/薄邊框（路燈燈柱+燈臂、旗幡細桿、指路牌柱、曬衣繩桿+繩、拱門立柱）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件。
+_TREE_VILLAGE_DILATED_PROPS = {"lamp_post", "banner", "signpost", "laundry_line", "arch_gate"}
+
+
+def slice_tree_village_bg(sheet: Image) -> dict:
+    """森林樹屋村落背景切圖：手法與 `slice_meadow_village_bg`/`slice_holy_city_bg` 完全一致
+    （far 不去背當 backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；
+    ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box_sky(
+        sheet.crop(TREE_VILLAGE_BG_FAR.x, TREE_VILLAGE_BG_FAR.y, TREE_VILLAGE_BG_FAR.w, TREE_VILLAGE_BG_FAR.h),
+        TREE_VILLAGE_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(TREE_VILLAGE_BG_MID.x, TREE_VILLAGE_BG_MID.y, TREE_VILLAGE_BG_MID.w, TREE_VILLAGE_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, TREE_VILLAGE_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(TREE_VILLAGE_BG_FORE.x, TREE_VILLAGE_BG_FORE.y, TREE_VILLAGE_BG_FORE.w, TREE_VILLAGE_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, TREE_VILLAGE_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見上方校準說明）已經避開「地面平台」標籤方框所在的 y 範圍，不需要
+    # （也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(TREE_VILLAGE_BG_GROUND.x, TREE_VILLAGE_BG_GROUND.y, TREE_VILLAGE_BG_GROUND.w, TREE_VILLAGE_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_tree_village_props(sheet: Image) -> dict:
+    """森林樹屋村落道具列切圖：手法與 `slice_meadow_village_props`/`slice_holy_city_props`
+    完全一致（先蓋掉整條道具列的標籤方框，再逐一裁切去背 + 依 `_TREE_VILLAGE_DILATED_PROPS`
+    選細桿件保護）。
+    """
+    region = TREE_VILLAGE_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, TREE_VILLAGE_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in TREE_VILLAGE_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _TREE_VILLAGE_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -3139,6 +3338,48 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {MEADOW_VILLAGE_SHEET} not found, skipping meadow_village region slicing")
+
+    # --- 歐式白金王國首都（接手任務：`RegionType.kingdom` 重新指回 layered 美術，
+    # `design/city_layered_1.png`，`FYW_DEBUG_REGION=kingdom_city` 可直接截圖驗收）：
+    # 重新排回 9→11 地域循環。---
+    if os.path.exists(KINGDOM_CITY_SHEET):
+        kingdom_city_sheet = decode_png(KINGDOM_CITY_SHEET)
+        print(f"kingdom_city_sheet: {kingdom_city_sheet.width}x{kingdom_city_sheet.height}")
+
+        kingdom_city_bg_dir = os.path.join(OUT_ROOT, "regions", "kingdom_city", "bg")
+        for name, img in slice_kingdom_city_bg(kingdom_city_sheet).items():
+            out_path = os.path.join(kingdom_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        kingdom_city_props_dir = os.path.join(OUT_ROOT, "regions", "kingdom_city", "props")
+        for name, img in slice_kingdom_city_props(kingdom_city_sheet).items():
+            out_path = os.path.join(kingdom_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {KINGDOM_CITY_SHEET} not found, skipping kingdom_city region slicing")
+
+    # --- 森林樹屋村落（接手任務：`RegionType.village3` 重新指回 layered 美術，
+    # `design/village3_layered.png`，`FYW_DEBUG_REGION=tree_village` 可直接截圖驗收）：
+    # 重新排回 9→11 地域循環。---
+    if os.path.exists(TREE_VILLAGE_SHEET):
+        tree_village_sheet = decode_png(TREE_VILLAGE_SHEET)
+        print(f"tree_village_sheet: {tree_village_sheet.width}x{tree_village_sheet.height}")
+
+        tree_village_bg_dir = os.path.join(OUT_ROOT, "regions", "tree_village", "bg")
+        for name, img in slice_tree_village_bg(tree_village_sheet).items():
+            out_path = os.path.join(tree_village_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        tree_village_props_dir = os.path.join(OUT_ROOT, "regions", "tree_village", "props")
+        for name, img in slice_tree_village_props(tree_village_sheet).items():
+            out_path = os.path.join(tree_village_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {TREE_VILLAGE_SHEET} not found, skipping tree_village region slicing")
 
 
 def inspect(sheet: Image) -> None:

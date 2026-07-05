@@ -4,9 +4,9 @@ import Foundation
 /// Stage C 擴充見 `19_STAGE_C_SPEC.md` §2，美術大改版第 2 波擴充見
 /// `21_ASSET_OVERHAUL_PLAN.md` §2/§4）：薄骨架，為地域美術預留掛點。
 /// `riverlands`/`highlands`/`coastalReach` 尚無美術，保留骨架供未來地域擴充；
-/// **目前上線的序列是 9 地域循環（全部 layered 新格式）**：
-/// `meadowOrigin → hotspringVillage → harbor → snowMountain → steampunkCity → futureCity →
-/// mountainPalace → magicCity → holyCity`。
+/// **目前上線的序列是 11 地域循環（全部 layered 新格式）**：
+/// `meadowOrigin → village3 → kingdom → hotspringVillage → harbor → snowMountain →
+/// steampunkCity → futureCity → mountainPalace → magicCity → holyCity`。
 ///
 /// **舊格式地域移除（使用者決定，2026-07-05）**：meadowOrigin(grassland)/kingdom/
 /// village3/skyVillage/skyCity 這 5 個舊「單 backdrop」地域會讓角色看起來「浮在半空」
@@ -17,20 +17,36 @@ import Foundation
 /// **meadowOrigin 重新排回循環（接手任務，2026-07-05）**：`design/village_layered.png`
 /// 補了 layered 格式的歐式中世紀奇幻村莊美術（`21` §8A 洋紅去背 + 真多層視差管線），
 /// `meadowOrigin` 改指到新資源夾 `"meadow_village"`（取代舊 `"grassland"` 單張背景），
-/// 加入 `layeredRegions`，重新排回 `cycle` 最前面（開場地域）。kingdom/village3/skyVillage/
-/// skyCity 仍是舊格式、仍休眠，待各自補上 layered 美術才能重新排回。
+/// 加入 `layeredRegions`，重新排回 `cycle` 最前面（開場地域）。
+///
+/// **kingdom/village3 重新排回循環（再接手任務，2026-07-05）**：`design/city_layered_1.png`
+/// （歐式白金王國首都）補了 layered 格式美術，`kingdom` 改指到新資源夾 `"kingdom_city"`
+/// （取代舊 `"kingdom"` 單張背景）；`design/village3_layered.png`（森林樹屋村落）補了
+/// layered 格式美術，`village3` 改指到新資源夾 `"tree_village"`（取代舊 `"village_3"`
+/// 單張背景）。兩者皆加入 `layeredRegions`，重新排回 `cycle`（緊接開場 `meadowOrigin`
+/// 之後：`meadowOrigin → village3 → kingdom → ……`）。skyVillage/skyCity 仍是舊格式、
+/// 仍休眠，待補上 layered 美術才能重新排回。
 /// 純函式、確定性，可測。
 public enum RegionType: Equatable, CaseIterable {
     case meadowOrigin
     case riverlands
     case highlands
     case coastalReach
+    /// 王國首都（接手任務，2026-07-05：`design/city_layered_1.png` 補上 layered 格式的
+    /// 歐式白金王國首都美術——尖塔/拱橋/雪山遠景/天使雕像/紋章大門/華麗宅邸/噴泉，取代舊
+    /// `"kingdom"` 單張 backdrop），遠景含天空、中景/前景/道具皆洋紅底去背成透明
+    /// （`isLayered`），地面平台不去背。重新排回循環，緊接開場 `meadowOrigin`/`village3`
+    /// 之後（`meadowOrigin → village3 → kingdom → ……`）。
     case kingdom
     /// 海城（`design/sea_city.png`，Stage C 舊格式地域）：已被 `harbor` 取代排出 8 地域循環
     /// （第 3 波，`21` §2），case 保留（休眠、不刪）供未來重啟或参考，`assetFolder`/
     /// `PropScatter`/`RegionNpcScatter` 對應槽位表原樣保留，只是不再被 `cycle` 選到。
     case seaCity
-    /// 村莊 B（`design/village_3.png`，森林樹屋村落），美術大改版第 2 波新增。
+    /// 森林樹屋村落（接手任務，2026-07-05：`design/village3_layered.png` 補上 layered 格式
+    /// 美術——巨木/樹屋/繩橋/瀑布/苔蘚屋頂農舍/市集攤位，取代舊 `"village_3"` 單張
+    /// backdrop），遠景含天空、中景/前景/道具皆洋紅底去背成透明（`isLayered`），地面平台
+    /// 不去背。重新排回循環，緊接開場 `meadowOrigin` 之後（`meadowOrigin → village3 →
+    /// kingdom → ……`）。
     case village3
     /// 天空村莊（`design/sky_village.png`，浮空平台迴廊），美術大改版第 2 波新增。
     case skyVillage
@@ -88,16 +104,17 @@ public enum RegionType: Equatable, CaseIterable {
     /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
     /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
     /// 再新增 steampunkCity、再新增 futureCity；後續接手任務移除 village2/valley；
-    /// 再接手任務把 meadowOrigin 重新指回 layered 美術、排回循環最前面當開場地域）：
-    /// 9 地域循環，旅程節奏由近人到奇幻——
-    /// 草原（開場）→ 溫泉山村 → 海港 → 雪山王國 → 蒸氣龐克飛船城 →
-    /// 賽博龐克霓虹夜城 → 仙俠山宮 → 浮空魔法之城 → 聖光之城 →（回到草原）。兩座科技感城市
-    /// （蒸氣龐克飛船城、賽博龐克霓虹夜城）相鄰成群，之後才進入飄浮天界序列（仙俠山宮起）
-    /// 作為寧靜的收尾對比。
+    /// 再接手任務把 meadowOrigin 重新指回 layered 美術、排回循環最前面當開場地域；
+    /// 再接手任務把 kingdom/village3 重新指回 layered 美術、排回循環緊接開場之後）：
+    /// 11 地域循環，旅程節奏由近人到奇幻——
+    /// 草原（開場）→ 森林樹屋村落 → 王國首都 → 溫泉山村 → 海港 → 雪山王國 →
+    /// 蒸氣龐克飛船城 → 賽博龐克霓虹夜城 → 仙俠山宮 → 浮空魔法之城 → 聖光之城 →
+    /// （回到草原）。兩座科技感城市（蒸氣龐克飛船城、賽博龐克霓虹夜城）相鄰成群，之後才
+    /// 進入飄浮天界序列（仙俠山宮起）作為寧靜的收尾對比。
     /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。其餘骨架 case
     /// （riverlands/highlands/coastalReach）保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .mountainPalace, .magicCity, .holyCity,
+        .meadowOrigin, .village3, .kingdom, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .mountainPalace, .magicCity, .holyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -116,17 +133,21 @@ public enum RegionType: Equatable, CaseIterable {
     /// `"grassland"`（舊「單 backdrop」草原美術）。**接手任務（2026-07-05）**：改指到新
     /// layered 資源夾 `"meadow_village"`（`design/village_layered.png` 切出，
     /// `scripts/slice_assets.py` 的 `slice_meadow_village_bg`/`slice_meadow_village_props`），
-    /// 讓開場地域也有 mid/fore 真多層視差，角色不再浮空。`riverlands`/`highlands`/
-    /// `coastalReach` 骨架 case 仍暫時歸類回 `"grassland"`（尚無專屬美術）。`RegionType`
-    /// 的 case 名稱本身保留 `meadowOrigin`（沿用既有測試/呼叫端命名，不做無謂 churn），
-    /// 只換它指向的資源夾。
+    /// 讓開場地域也有 mid/fore 真多層視差，角色不再浮空。
+    ///
+    /// **再接手任務（2026-07-05）**：`kingdom` 改指到新 layered 資源夾 `"kingdom_city"`
+    /// （`design/city_layered_1.png` 切出，取代舊 `"kingdom"` 單張背景）；`village3` 改指到
+    /// 新 layered 資源夾 `"tree_village"`（`design/village3_layered.png` 切出，取代舊
+    /// `"village_3"` 單張背景）。`riverlands`/`highlands`/`coastalReach` 骨架 case 仍暫時
+    /// 歸類回 `"grassland"`（尚無專屬美術）。`RegionType` 的 case 名稱本身保留 `meadowOrigin`/
+    /// `kingdom`/`village3`（沿用既有測試/呼叫端命名，不做無謂 churn），只換它們指向的資源夾。
     public var assetFolder: String {
         switch self {
-        case .kingdom: return "kingdom"
+        case .kingdom: return "kingdom_city"
         case .seaCity: return "sea_city"
         case .meadowOrigin: return "meadow_village"
         case .riverlands, .highlands, .coastalReach: return "grassland"
-        case .village3: return "village_3"
+        case .village3: return "tree_village"
         case .skyVillage: return "sky_village"
         case .skyCity: return "sky_city"
         case .harbor: return "harbor"
@@ -144,10 +165,10 @@ public enum RegionType: Equatable, CaseIterable {
     /// mid/fore 素材是**透明去背過的獨立物件層**（非各自含天空的完整場景），
     /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
     /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
-    /// far+ground」的過渡 workaround。目前有 `meadowOrigin`/`harbor`/`hotspringVillage`/
-    /// `mountainPalace`/`snowMountain`/`steampunkCity`/`futureCity`/`magicCity`/`holyCity`
-    /// （皆已排進循環）。
-    private static let layeredRegions: Set<RegionType> = [.meadowOrigin, .harbor, .hotspringVillage, .mountainPalace, .snowMountain, .steampunkCity, .futureCity, .magicCity, .holyCity]
+    /// far+ground」的過渡 workaround。目前有 `meadowOrigin`/`village3`/`kingdom`/`harbor`/
+    /// `hotspringVillage`/`mountainPalace`/`snowMountain`/`steampunkCity`/`futureCity`/
+    /// `magicCity`/`holyCity`（皆已排進循環）。
+    private static let layeredRegions: Set<RegionType> = [.meadowOrigin, .village3, .kingdom, .harbor, .hotspringVillage, .mountainPalace, .snowMountain, .steampunkCity, .futureCity, .magicCity, .holyCity]
 
     /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。
     public var isLayered: Bool { RegionType.layeredRegions.contains(self) }
