@@ -119,7 +119,28 @@ final class PropScatterTests: XCTestCase {
 
     func testSlotsForRegionPicksSkyCityV2Pool() {
         XCTAssertEqual(PropScatter.slots(for: .skyCity), PropScatter.skyCityV2Slots)
-        XCTAssertFalse(PropScatter.slots(for: .skyCity).isEmpty, "白金浮空天空之城已重新排進 12 地域循環（壓軸地域），不該再是空槽位表")
+        XCTAssertFalse(PropScatter.slots(for: .skyCity).isEmpty, "白金浮空天空之城已重新排進 13 地域循環（壓軸地域），不該再是空槽位表")
+    }
+
+    // MARK: - 浮空天空村地域道具池（再接手任務：skyVillage 重新指回 layered 美術，futureCity 之後）
+
+    func testSkyVillageV2SlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.skyVillageV2Slots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "浮空天空村槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.skyVillageV2Slots.isEmpty, "浮空天空村槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.skyVillageV2Slots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksSkyVillageV2Pool() {
+        XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageV2Slots)
+        XCTAssertFalse(PropScatter.slots(for: .skyVillage).isEmpty, "浮空天空村已重新排進 13 地域循環，不該再是空槽位表")
     }
 
     // MARK: - 森林樹屋村落地域道具池（再接手任務：village3 重新指回 layered 美術）
@@ -373,7 +394,11 @@ final class PropScatterTests: XCTestCase {
         // village3 再接手任務（2026-07-05）重新指回 layered 美術，道具池換成 `treeVillageSlots`
         // （不再是舊 `village3Slots`，見 `testSlotsForRegionPicksTreeVillagePool`）；`village3Slots`
         // 本身仍保留（休眠，對應舊 `"village_3"` 單張背景，供未來重啟參考）。
-        XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageSlots)
+        // skyVillage 再接手任務（2026-07-05，五張舊地域重製收尾）重新指回 layered 美術，
+        // 道具池換成 `skyVillageV2Slots`（不再是舊 `skyVillageSlots`，見
+        // `testSlotsForRegionPicksSkyVillageV2Pool`）；`skyVillageSlots` 本身仍保留
+        // （休眠，對應舊 `"sky_village"` 單張背景，供未來重啟參考）。
+        XCTAssertEqual(PropScatter.slots(for: .skyVillage), PropScatter.skyVillageV2Slots)
         // skyCity 再接手任務（2026-07-05）重新指回 layered 美術，道具池換成 `skyCityV2Slots`
         // （不再是舊 `skyCitySlots`，見 `testSlotsForRegionPicksSkyCityV2Pool`）；`skyCitySlots`
         // 本身仍保留（休眠，對應舊 `"sky_city"` 單張背景，供未來重啟參考）。

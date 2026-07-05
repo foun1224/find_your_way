@@ -289,6 +289,20 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "notice_board"),
     ]
 
+    /// 浮空天空村地域槽位表（接手任務：`RegionType.skyVillage` 重新指回 layered 美術，
+    /// `21` §2/§4，sky_city_v2/kingdom_city 管線推廣）：道具池換成 `regions/sky_village_v2/props/`
+    /// 切出的浮空天空村道具（路燈/長椅/花車/水井/告示牌/盆栽小樹等），間距手法同
+    /// `skyCityV2Slots`（確定性、依 `baseX` 遞增排列）。取代舊 `skyVillageSlots`
+    /// （對應舊 `"sky_village"` 單張背景的道具池，已停用、原樣保留供未來重啟參考）。
+    public static let skyVillageV2Slots: [Slot] = [
+        Slot(baseX: 40, propName: "lamp_post"),
+        Slot(baseX: 130, propName: "signpost"),
+        Slot(baseX: 220, propName: "well"),
+        Slot(baseX: 310, propName: "bench"),
+        Slot(baseX: 400, propName: "flower_cart"),
+        Slot(baseX: 490, propName: "notice_board"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -301,7 +315,8 @@ public enum PropScatter {
         case .riverlands, .highlands, .coastalReach: return slots
         // 森林樹屋村落（接手任務，重新指回 layered 美術）：道具池見 `treeVillageSlots`。
         case .village3: return treeVillageSlots
-        case .skyVillage: return skyVillageSlots
+        // 浮空天空村（接手任務，重新指回 layered 美術）：道具池見 `skyVillageV2Slots`。
+        case .skyVillage: return skyVillageV2Slots
         // 白金浮空天空之城（接手任務，重新指回 layered 美術，壓軸地域）：道具池見 `skyCityV2Slots`。
         case .skyCity: return skyCityV2Slots
         // 海港（`20` §8A 驗證通過，`21` §2 第 3 波取代 seaCity 排進循環）：道具池見 `harborSlots`。

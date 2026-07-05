@@ -270,7 +270,9 @@ public final class GameScene: SKScene {
         // 森林樹屋村落（接手任務：`village3` 重新指回 layered 美術 `"tree_village"`）：新舊
         // 資源夾名稱皆接受，方便截圖驗收。
         case "village_3", "village3", "tree_village", "treevillage": return .village3
-        case "sky_village", "skyvillage": return .skyVillage
+        // 浮空天空村（接手任務：`skyVillage` 重新指回 layered 美術 `"sky_village_v2"`，
+        // futureCity 之後排回循環）：新舊資源夾名稱皆接受，方便截圖驗收。
+        case "sky_village", "skyvillage", "sky_village_v2", "skyvillagev2": return .skyVillage
         // 白金浮空天空之城（接手任務：`skyCity` 重新指回 layered 美術 `"sky_city_v2"`，
         // 壓軸地域）：新舊資源夾名稱皆接受，方便截圖驗收。
         case "sky_city", "skycity", "sky_city_magic", "sky_city_v2", "skycityv2": return .skyCity
