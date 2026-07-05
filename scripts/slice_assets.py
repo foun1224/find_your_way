@@ -57,6 +57,14 @@ HOTSPRING_VILLAGE_SHEET = os.path.join(REPO_ROOT, "design", "hotspring_village.p
 # 中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。座標由 Read +
 # 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
 MOUNTAIN_PALACE_SHEET = os.path.join(REPO_ROOT, "design", "mountain_palace.png")
+# 第 6 波（接手任務：hotspring/mountain_palace 管線推廣到第四、第五個 layered 地域）：
+# `design/snow_mountain.png`（歐式中世紀奇幻雪山王國，石造拱門城牆/藍色紋章旗/雪中廢墟塔樓/
+# 吊橋/火把）與 `design/magic_city.png`（漂浮魔法之城，穹頂尖塔/水晶噴泉/符文法陣/藍金紋章），
+# 皆 1536x1024，版式與 hotspring_village/mountain_palace 完全相同——遠景含天空不去背、
+# 中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口。座標由 Read +
+# 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
+SNOW_MOUNTAIN_SHEET = os.path.join(REPO_ROOT, "design", "snow_mountain.png")
+MAGIC_CITY_SHEET = os.path.join(REPO_ROOT, "design", "magic_city.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -1718,6 +1726,197 @@ def slice_mountain_palace_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 雪山王國（接手任務：hotspring/mountain_palace 管線推廣到第四個 layered 地域，
+# `design/snow_mountain.png`，1536x1024，版式與 hotspring_village/mountain_palace 完全相同——
+# 遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。五帶 y 範圍：
+#   Far（雪山群峰+石造拱門城牆天際線，不去背）：          y=0..273   （h=274）
+#   Mid（洋紅底雪山城牆聚落/吊橋/塔樓，去背）：            y=274..493 （h=220）
+#   Fore（洋紅底石拱門/營帳/絞架/符文石碑/雪松，去背）：    y=494..733 （h=240；尾端切在
+#                                          內容實際結束處，不可再往下延伸——那段除了純洋紅
+#                                          過渡留白外還疊了「地面平台」標籤黑底方框）。
+#   Ground（石磚步道，不去背，只補頂緣洋紅缺口）：          y=788..847 （h=60，x=12..1523，
+#                                          左右各裁掉 12px，與 hotspring/mountain_palace 同款
+#                                          問題，用同一組 12px inset 校準）。
+#   Props（洋紅底道具列，去背）：                          y=850..1023（h=174）
+# 去背手法完全沿用 hotspring/mountain_palace 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+SNOW_MOUNTAIN_BG_FAR = Region(x=0, y=0, w=1536, h=274)
+SNOW_MOUNTAIN_BG_MID = Region(x=0, y=274, w=1536, h=220)
+SNOW_MOUNTAIN_BG_FORE = Region(x=0, y=494, w=1536, h=240)
+SNOW_MOUNTAIN_BG_GROUND = Region(x=12, y=788, w=1512, h=60)
+SNOW_MOUNTAIN_PROPS_REGION = Region(x=0, y=850, w=1536, h=174)
+
+SNOW_MOUNTAIN_LABEL_RECT = Region(x=0, y=0, w=130, h=48)
+SNOW_MOUNTAIN_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=44)
+
+# 道具列 12 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：雪松／藍色紋章旗／指標路牌／火把石柱／木箱／木桶／
+# 尖刺木柵欄／雪堆石堆／交叉木柵欄／燈柱／符文石碑／告示板。範圍刻意留餘裕，去背 +
+# autocrop 後收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+SNOW_MOUNTAIN_PROP_REGIONS: dict = {
+    "snow_pine": Region(x=92, y=0, w=117, h=174),
+    "heraldic_banner": Region(x=209, y=0, w=73, h=174),
+    "signpost": Region(x=296, y=0, w=95, h=174),
+    "torch_pillar": Region(x=395, y=0, w=96, h=174),
+    "crate": Region(x=496, y=0, w=125, h=174),
+    "barrel": Region(x=626, y=0, w=103, h=174),
+    "wooden_barricade": Region(x=740, y=0, w=131, h=174),
+    "snow_cairn": Region(x=880, y=0, w=93, h=174),
+    "wooden_fence": Region(x=975, y=0, w=161, h=174),
+    "lamp_post": Region(x=1136, y=0, w=92, h=174),
+    "rune_stele": Region(x=1235, y=0, w=101, h=174),
+    "notice_board": Region(x=1349, y=0, w=137, h=174),
+}
+# 細桿件/薄邊框（紋章旗桿、路牌柱身、火把柱、柵欄交叉桿、燈柱）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件。
+_SNOW_MOUNTAIN_DILATED_PROPS = {"heraldic_banner", "signpost", "torch_pillar", "wooden_barricade", "wooden_fence", "lamp_post"}
+
+
+def slice_snow_mountain_bg(sheet: Image) -> dict:
+    """雪山王國背景切圖：手法與 `slice_mountain_palace_bg` 完全一致（far 不去背當 backdrop +
+    水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(SNOW_MOUNTAIN_BG_FAR.x, SNOW_MOUNTAIN_BG_FAR.y, SNOW_MOUNTAIN_BG_FAR.w, SNOW_MOUNTAIN_BG_FAR.h),
+        SNOW_MOUNTAIN_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(SNOW_MOUNTAIN_BG_MID.x, SNOW_MOUNTAIN_BG_MID.y, SNOW_MOUNTAIN_BG_MID.w, SNOW_MOUNTAIN_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, SNOW_MOUNTAIN_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(SNOW_MOUNTAIN_BG_FORE.x, SNOW_MOUNTAIN_BG_FORE.y, SNOW_MOUNTAIN_BG_FORE.w, SNOW_MOUNTAIN_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, SNOW_MOUNTAIN_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `SNOW_MOUNTAIN_BG_GROUND` 校準說明）已經避開「地面平台」標籤方框
+    # 所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(SNOW_MOUNTAIN_BG_GROUND.x, SNOW_MOUNTAIN_BG_GROUND.y, SNOW_MOUNTAIN_BG_GROUND.w, SNOW_MOUNTAIN_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_snow_mountain_props(sheet: Image) -> dict:
+    """雪山王國道具列切圖：手法與 `slice_mountain_palace_props` 完全一致（先蓋掉整條道具列的
+    標籤方框，再逐一裁切去背 + 依 `_SNOW_MOUNTAIN_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = SNOW_MOUNTAIN_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, SNOW_MOUNTAIN_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in SNOW_MOUNTAIN_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _SNOW_MOUNTAIN_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 浮空魔法之城（接手任務：hotspring/mountain_palace 管線推廣到第五個 layered 地域，
+# `design/magic_city.png`，1536x1024，版式與 hotspring_village/mountain_palace 完全相同——
+# 遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。五帶 y 範圍：
+#   Far（漂浮尖塔穹頂天際線+雲海，不去背）：              y=0..277   （h=278）
+#   Mid（洋紅底漂浮城邦聚落，去背）：                      y=278..491 （h=214）
+#   Fore（洋紅底水晶噴泉/涼亭/符文法陣/花壇，去背）：       y=492..729 （h=238；尾端切在
+#                                          內容實際結束處，不可再往下延伸——那段除了純洋紅
+#                                          過渡留白外還疊了「地面平台」標籤黑底方框）。
+#   Ground（石磚步道，不去背，只補頂緣洋紅缺口）：          y=777..846 （h=70，x=12..1523，
+#                                          左右各裁掉 12px，與 hotspring/mountain_palace 同款
+#                                          問題，用同一組 12px inset 校準）。
+#   Props（洋紅底道具列，去背）：                          y=850..1023（h=174）
+# 去背手法完全沿用 hotspring/mountain_palace 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+MAGIC_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=278)
+MAGIC_CITY_BG_MID = Region(x=0, y=278, w=1536, h=214)
+MAGIC_CITY_BG_FORE = Region(x=0, y=492, w=1536, h=238)
+MAGIC_CITY_BG_GROUND = Region(x=12, y=777, w=1512, h=70)
+MAGIC_CITY_PROPS_REGION = Region(x=0, y=850, w=1536, h=174)
+
+MAGIC_CITY_LABEL_RECT = Region(x=0, y=0, w=130, h=48)
+MAGIC_CITY_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=44)
+
+# 道具列 11 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：水晶噴泉座／水晶燈柱／符文紋章旗／花卉水甕／木箱／木桶／
+# 藍白遮陽市集攤／水晶柱座／望遠鏡／符文法輪／告示板。範圍刻意留餘裕，去背 + autocrop
+# 後收斂到精確 bounding box；相鄰槽位的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+MAGIC_CITY_PROP_REGIONS: dict = {
+    "crystal_shard": Region(x=23, y=0, w=124, h=174),
+    "crystal_lamp": Region(x=171, y=0, w=78, h=174),
+    "arcane_banner": Region(x=275, y=0, w=82, h=174),
+    "flower_urn": Region(x=378, y=0, w=123, h=174),
+    "crate": Region(x=516, y=0, w=123, h=174),
+    "barrel": Region(x=663, y=0, w=96, h=174),
+    "market_stall": Region(x=775, y=0, w=200, h=174),
+    "crystal_pillar": Region(x=980, y=0, w=107, h=174),
+    "telescope": Region(x=1090, y=0, w=123, h=174),
+    "arcane_wheel": Region(x=1222, y=0, w=118, h=174),
+    "notice_board": Region(x=1360, y=0, w=147, h=174),
+}
+# 細桿件/薄邊框（水晶燈柱身、紋章旗桿、望遠鏡支架、法輪細輻條、水晶柱座）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用 `remove_small_components`
+# 保留分離部件。
+_MAGIC_CITY_DILATED_PROPS = {"crystal_lamp", "arcane_banner", "telescope", "arcane_wheel", "crystal_pillar"}
+
+
+def slice_magic_city_bg(sheet: Image) -> dict:
+    """浮空魔法之城背景切圖：手法與 `slice_mountain_palace_bg` 完全一致（far 不去背當 backdrop +
+    水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(MAGIC_CITY_BG_FAR.x, MAGIC_CITY_BG_FAR.y, MAGIC_CITY_BG_FAR.w, MAGIC_CITY_BG_FAR.h),
+        MAGIC_CITY_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(MAGIC_CITY_BG_MID.x, MAGIC_CITY_BG_MID.y, MAGIC_CITY_BG_MID.w, MAGIC_CITY_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, MAGIC_CITY_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(MAGIC_CITY_BG_FORE.x, MAGIC_CITY_BG_FORE.y, MAGIC_CITY_BG_FORE.w, MAGIC_CITY_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, MAGIC_CITY_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `MAGIC_CITY_BG_GROUND` 校準說明）已經避開「地面平台」標籤方框
+    # 所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(MAGIC_CITY_BG_GROUND.x, MAGIC_CITY_BG_GROUND.y, MAGIC_CITY_BG_GROUND.w, MAGIC_CITY_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_magic_city_props(sheet: Image) -> dict:
+    """浮空魔法之城道具列切圖：手法與 `slice_mountain_palace_props` 完全一致（先蓋掉整條道具列的
+    標籤方框，再逐一裁切去背 + 依 `_MAGIC_CITY_DILATED_PROPS` 選細桿件保護）。
+    """
+    region = MAGIC_CITY_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, MAGIC_CITY_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in MAGIC_CITY_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _MAGIC_CITY_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -2176,6 +2375,46 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {MOUNTAIN_PALACE_SHEET} not found, skipping mountain_palace region slicing")
+
+    # --- 雪山王國（接手任務：hotspring/mountain_palace 管線推廣，`design/snow_mountain.png`）：
+    # 排進 11 地域循環，`FYW_DEBUG_REGION=snow_mountain` 可直接截圖驗收。---
+    if os.path.exists(SNOW_MOUNTAIN_SHEET):
+        snow_mountain_sheet = decode_png(SNOW_MOUNTAIN_SHEET)
+        print(f"snow_mountain_sheet: {snow_mountain_sheet.width}x{snow_mountain_sheet.height}")
+
+        snow_mountain_bg_dir = os.path.join(OUT_ROOT, "regions", "snow_mountain", "bg")
+        for name, img in slice_snow_mountain_bg(snow_mountain_sheet).items():
+            out_path = os.path.join(snow_mountain_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        snow_mountain_props_dir = os.path.join(OUT_ROOT, "regions", "snow_mountain", "props")
+        for name, img in slice_snow_mountain_props(snow_mountain_sheet).items():
+            out_path = os.path.join(snow_mountain_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {SNOW_MOUNTAIN_SHEET} not found, skipping snow_mountain region slicing")
+
+    # --- 浮空魔法之城（接手任務：hotspring/mountain_palace 管線推廣，`design/magic_city.png`）：
+    # 排進 12 地域循環，`FYW_DEBUG_REGION=magic_city` 可直接截圖驗收。---
+    if os.path.exists(MAGIC_CITY_SHEET):
+        magic_city_sheet = decode_png(MAGIC_CITY_SHEET)
+        print(f"magic_city_sheet: {magic_city_sheet.width}x{magic_city_sheet.height}")
+
+        magic_city_bg_dir = os.path.join(OUT_ROOT, "regions", "magic_city", "bg")
+        for name, img in slice_magic_city_bg(magic_city_sheet).items():
+            out_path = os.path.join(magic_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        magic_city_props_dir = os.path.join(OUT_ROOT, "regions", "magic_city", "props")
+        for name, img in slice_magic_city_props(magic_city_sheet).items():
+            out_path = os.path.join(magic_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {MAGIC_CITY_SHEET} not found, skipping magic_city region slicing")
 
 
 def inspect(sheet: Image) -> None:

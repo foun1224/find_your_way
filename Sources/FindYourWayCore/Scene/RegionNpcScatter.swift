@@ -101,6 +101,29 @@ public enum RegionNpcScatter {
         Slot(baseX: 800, npcName: "traveler"),
     ]
 
+    /// 雪山王國地域槽位表（接手任務：hotspring/mountain_palace 管線推廣到第四個 layered
+    /// 地域，`21` §3）：旅人/商人/學者/藥師——沿用共享 `npc/` 資料夾裡最貼近「歐式中世紀
+    /// 王國往來人跡」意象的既有角色（旅人如穿越雪山商道的行者，商人如駐守城門補給的貨商），
+    /// 搭配學者/藥師維持奇幻氛圍，與 `hotspringVillageSlots` 同款人口組成但獨立排法，
+    /// 銜接海港與天空村莊之間的過渡感。
+    public static let snowMountainSlots: [Slot] = [
+        Slot(baseX: 80, npcName: "traveler"),
+        Slot(baseX: 310, npcName: "merchant"),
+        Slot(baseX: 540, npcName: "scholar"),
+        Slot(baseX: 770, npcName: "apothecary"),
+    ]
+
+    /// 浮空魔法之城地域槽位表（接手任務：hotspring/mountain_palace 管線推廣到第五個
+    /// layered 地域，`21` §3）：學者/藥師/樂師/商人——與 `skySlots`（天空村莊/天空魔法城）
+    /// 同款人口組成但獨立排法，銜接仙俠山宮與天空魔法城之間的過渡感，維持天界奇幻序列
+    /// 一致的居民風格。
+    public static let magicCitySlots: [Slot] = [
+        Slot(baseX: 100, npcName: "scholar"),
+        Slot(baseX: 350, npcName: "apothecary"),
+        Slot(baseX: 600, npcName: "musician"),
+        Slot(baseX: 830, npcName: "merchant"),
+    ]
+
     /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
     /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
@@ -118,6 +141,10 @@ public enum RegionNpcScatter {
         case .hotspringVillage: return hotspringVillageSlots
         // 仙俠山宮（接手任務，hotspring 管線推廣）：居民組成見 `mountainPalaceSlots`。
         case .mountainPalace: return mountainPalaceSlots
+        // 雪山王國（接手任務，hotspring/mountain_palace 管線推廣）：居民組成見 `snowMountainSlots`。
+        case .snowMountain: return snowMountainSlots
+        // 浮空魔法之城（接手任務，hotspring/mountain_palace 管線推廣）：居民組成見 `magicCitySlots`。
+        case .magicCity: return magicCitySlots
         }
     }
 

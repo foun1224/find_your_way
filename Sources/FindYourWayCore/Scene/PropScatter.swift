@@ -201,6 +201,32 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "stone_stele"),
     ]
 
+    /// 雪山王國地域槽位表（接手任務：hotspring/mountain_palace 管線推廣到第四個 layered
+    /// 地域，`21` §2/§4）：道具池換成 `regions/snow_mountain/props/` 切出的歐式中世紀奇幻
+    /// 雪山王國道具（雪松/紋章旗/火把石柱/雪堆石堆/符文石碑等），間距手法同
+    /// `mountainPalaceSlots`（確定性、依 `baseX` 遞增排列）。
+    public static let snowMountainSlots: [Slot] = [
+        Slot(baseX: 40, propName: "snow_pine"),
+        Slot(baseX: 130, propName: "heraldic_banner"),
+        Slot(baseX: 220, propName: "torch_pillar"),
+        Slot(baseX: 310, propName: "snow_cairn"),
+        Slot(baseX: 400, propName: "rune_stele"),
+        Slot(baseX: 490, propName: "wooden_fence"),
+    ]
+
+    /// 浮空魔法之城地域槽位表（接手任務：hotspring/mountain_palace 管線推廣到第五個
+    /// layered 地域，`21` §2/§4）：道具池換成 `regions/magic_city/props/` 切出的漂浮魔法
+    /// 之城道具（水晶噴泉座/符文紋章旗/水晶柱座/望遠鏡/符文法輪等），間距手法同
+    /// `mountainPalaceSlots`（確定性、依 `baseX` 遞增排列）。
+    public static let magicCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "crystal_shard"),
+        Slot(baseX: 130, propName: "arcane_banner"),
+        Slot(baseX: 220, propName: "crystal_pillar"),
+        Slot(baseX: 310, propName: "flower_urn"),
+        Slot(baseX: 400, propName: "telescope"),
+        Slot(baseX: 490, propName: "arcane_wheel"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -219,6 +245,10 @@ public enum PropScatter {
         case .hotspringVillage: return hotspringVillageSlots
         // 仙俠山宮（接手任務，hotspring 管線推廣）：道具池見 `mountainPalaceSlots`。
         case .mountainPalace: return mountainPalaceSlots
+        // 雪山王國（接手任務，hotspring/mountain_palace 管線推廣）：道具池見 `snowMountainSlots`。
+        case .snowMountain: return snowMountainSlots
+        // 浮空魔法之城（接手任務，hotspring/mountain_palace 管線推廣）：道具池見 `magicCitySlots`。
+        case .magicCity: return magicCitySlots
         }
     }
 

@@ -158,6 +158,47 @@ final class PropScatterTests: XCTestCase {
         XCTAssertFalse(PropScatter.slots(for: .mountainPalace).isEmpty, "仙俠山宮已排進 10 地域循環，不該再是空槽位表")
     }
 
+    // MARK: - 雪山王國/浮空魔法之城地域道具池（接手任務：hotspring/mountain_palace 管線推廣到
+    // 第四、第五個 layered 地域）
+
+    func testSnowMountainSlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.snowMountainSlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "雪山王國槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.snowMountainSlots.isEmpty, "雪山王國槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.snowMountainSlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksSnowMountainPool() {
+        XCTAssertEqual(PropScatter.slots(for: .snowMountain), PropScatter.snowMountainSlots)
+        XCTAssertFalse(PropScatter.slots(for: .snowMountain).isEmpty, "雪山王國已排進 12 地域循環，不該再是空槽位表")
+    }
+
+    func testMagicCitySlotsAreWithinSpanAndSortedAndNonEmpty() {
+        let baseXs = PropScatter.magicCitySlots.map(\.baseX)
+        XCTAssertEqual(baseXs, baseXs.sorted(), "浮空魔法之城槽位表應依 baseX 遞增排列")
+        XCTAssertFalse(PropScatter.magicCitySlots.isEmpty, "浮空魔法之城槽位表不應為空")
+        for i in 1..<baseXs.count {
+            XCTAssertGreaterThan(baseXs[i] - baseXs[i - 1], 0, "相鄰槽位不可重疊")
+        }
+        for slot in PropScatter.magicCitySlots {
+            XCTAssertGreaterThanOrEqual(slot.baseX, 0)
+            XCTAssertLessThan(slot.baseX, PropScatter.span)
+            XCTAssertFalse(slot.propName.isEmpty)
+        }
+    }
+
+    func testSlotsForRegionPicksMagicCityPool() {
+        XCTAssertEqual(PropScatter.slots(for: .magicCity), PropScatter.magicCitySlots)
+        XCTAssertFalse(PropScatter.slots(for: .magicCity).isEmpty, "浮空魔法之城已排進 12 地域循環，不該再是空槽位表")
+    }
+
     // MARK: - 美術大改版第 2 波新地域道具池（`21_ASSET_OVERHAUL_PLAN.md` §4，8 地域循環）
 
     /// 逐一驗證 5 個新地域槽位表的基本不變量（同 `testKingdomSlotsAreWithinSpanAndSortedAndNonEmpty`/

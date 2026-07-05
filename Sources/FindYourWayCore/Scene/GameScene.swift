@@ -273,6 +273,12 @@ public final class GameScene: SKScene {
         case "harbor": return .harbor
         // 溫泉山村（接手任務：harbor 管線推廣到第二個 layered 地域，`RegionType.hotspringVillage`）。
         case "hotspring_village", "hotspringvillage": return .hotspringVillage
+        // 仙俠山宮（新提示詞第二批 layered 地域，`RegionType.mountainPalace`）。
+        case "mountain_palace", "mountainpalace": return .mountainPalace
+        // 雪山石門（14_STORYLINE 地標，`RegionType.snowMountain`）。
+        case "snow_mountain", "snowmountain": return .snowMountain
+        // 浮空魔法都城（`RegionType.magicCity`）。
+        case "magic_city", "magiccity": return .magicCity
         default: return nil
         }
     }
