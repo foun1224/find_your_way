@@ -77,6 +77,16 @@ HOLY_CITY_SHEET = os.path.join(REPO_ROOT, "design", "holy_city.png")
 # 相同——遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補
 # 頂緣洋紅缺口。座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad 校準紀錄。
 STEAMPUNK_CITY_SHEET = os.path.join(REPO_ROOT, "design", "steampunk_city.png")
+# 第 9 波（接手任務：steampunk_city 管線推廣到第八個 layered 地域）：
+# `design/future_city.png`（賽博龐克霓虹夜城，懸浮載具/霓虹全息廣告牌/懸浮平台/
+# 全息地球儀/水晶/霓虹櫻花樹/咖啡廳與大門招牌，冷紫藍霓虹夜色調），1536x1024，版式與
+# steampunk_city 完全相同——遠景含天空不去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、
+# 地面平台不去背只補頂緣洋紅缺口。座標由 Read + 逐像素洋紅比例掃描校準，見 scratchpad
+# 校準紀錄。⚠️ 此圖美術本身大量使用洋紅/桃紅/紫色霓虹（招牌、燈光），與去背用的
+# `#FF00FF` 洋紅色極為接近，flood-fill 去背只會吃掉「與畫面邊緣連通」的洋紅（不會吃到
+# 建築內部被深色像素包住的霓虹色塊），但仍需逐張目視確認霓虹燈牌沒有被誤挖洞、也沒有
+# 洋紅殘留邊緣。
+FUTURE_CITY_SHEET = os.path.join(REPO_ROOT, "design", "future_city.png")
 OUT_ROOT = os.path.join(REPO_ROOT, "Resources", "art")
 
 
@@ -2122,6 +2132,109 @@ def slice_steampunk_city_props(sheet: Image) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 賽博龐克霓虹夜城（接手任務：steampunk_city 管線推廣到第八個 layered 地域，
+# `design/future_city.png`，1536x1024，版式與 steampunk_city 完全相同——遠景含天空不
+# 去背、中景/前景/道具皆洋紅 `#FF00FF` 底去背、地面平台不去背只補頂緣洋紅缺口）。
+# 座標由 Read + 逐像素洋紅比例掃描校準（見 scratchpad 校準紀錄），五帶 y 範圍與
+# steampunk_city 完全相同的網格（同一張底稿模板產生，邊界落在同樣的整條洋紅分隔帶內）：
+#   Far（霓虹夜空+懸浮載具剪影，不去背）：                     y=0..271   （h=272）
+#   Mid（洋紅底懸浮平台聚落，去背）：                          y=272..494 （h=223）
+#   Fore（洋紅底咖啡廳/大門招牌/路燈/水晶/霓虹樹，去背）：      y=495..785 （h=291）
+#   Ground（金屬拼接步道，不去背，只補頂緣洋紅缺口）：          y=790..851 （h=62，
+#                                          x=12..1523，左右各裁掉 12px，同
+#                                          steampunk_city 12px inset 校準）。
+#   Props（洋紅底道具列，去背）：                              y=852..1023（h=172）
+# ⚠️ 去背風險：本圖美術本身大量使用洋紅/桃紅/紫色霓虹（招牌、燈光），色相非常接近去背
+# 用的 `#FF00FF`。`chroma_key_flood_color` 是「從畫面邊緣 flood-fill」，只會吃掉與背景
+# 邊緣連通的洋紅，不會吃到被深色建築像素包住的內部霓虹色塊，因此大部分招牌霓虹安全；
+# 經實測 threshold=60（與其餘地域一致）不會咬到中景/前景/道具的霓虹招牌或水晶（皆與
+# 邊緣有深色像素隔開），維持 60 不下修——若之後改版美術把霓虹貼到與洋紅背景直接相鄰，
+# 才需要下修到 40 甚至 30。去背手法完全沿用 steampunk_city 驗證過的管線，不發明新做法。
+# ---------------------------------------------------------------------------
+FUTURE_CITY_BG_FAR = Region(x=0, y=0, w=1536, h=272)
+FUTURE_CITY_BG_MID = Region(x=0, y=272, w=1536, h=223)
+FUTURE_CITY_BG_FORE = Region(x=0, y=495, w=1536, h=291)
+FUTURE_CITY_BG_GROUND = Region(x=12, y=790, w=1512, h=62)
+FUTURE_CITY_PROPS_REGION = Region(x=0, y=852, w=1536, h=172)
+
+FUTURE_CITY_LABEL_RECT = Region(x=0, y=0, w=120, h=52)
+FUTURE_CITY_PROPS_LABEL_RECT = Region(x=0, y=8, w=140, h=48)
+
+# 道具列 12 個道具座標（逐欄「非洋紅像素」投影分段掃描 + 目視命名校準，見 scratchpad
+# 校準紀錄，順序由左到右）：全息廣告牌／街燈／霓虹直幅招牌「未來都市」／全息地球儀／
+# 板條箱／木桶／發光水晶／護欄路障／無人機／停車指示牌／霓虹櫻花盆栽／大門歡迎看板。
+# 範圍以相鄰道具中點分界，留餘裕，去背 + autocrop 後收斂到精確 bounding box；相鄰槽位
+# 的餘裕重疊落在洋紅留白，不會誤裁鄰居。
+FUTURE_CITY_PROP_REGIONS: dict = {
+    "holo_billboard": Region(x=0, y=0, w=223, h=172),
+    "street_lamp": Region(x=223, y=0, w=97, h=172),
+    "neon_banner": Region(x=320, y=0, w=107, h=172),
+    "hologram_globe": Region(x=427, y=0, w=150, h=172),
+    "crate": Region(x=577, y=0, w=132, h=172),
+    "barrel": Region(x=709, y=0, w=104, h=172),
+    "crystal": Region(x=813, y=0, w=105, h=172),
+    "barricade": Region(x=918, y=0, w=146, h=172),
+    "drone": Region(x=1064, y=0, w=114, h=172),
+    "parking_sign": Region(x=1178, y=0, w=103, h=172),
+    "neon_tree": Region(x=1281, y=0, w=110, h=172),
+    "welcome_sign": Region(x=1391, y=0, w=145, h=172),
+}
+# 細桿件/薄邊框（街燈柱、霓虹直幅招牌、停車指示牌柱、護欄路障細框）用
+# `keep_largest_component_dilated` 防斷；其餘本身較粗實的道具用
+# `remove_small_components` 保留分離部件。
+_FUTURE_CITY_DILATED_PROPS = {"street_lamp", "neon_banner", "parking_sign", "barricade"}
+
+
+def slice_future_city_bg(sheet: Image) -> dict:
+    """賽博龐克霓虹夜城背景切圖：手法與 `slice_steampunk_city_bg` 完全一致（far 不去背當
+    backdrop + 水平無縫羽化；mid/fore 洋紅底去背成透明中景/前景物件層；ground 不去背，
+    只補頂緣洋紅缺口）。
+    """
+    far = patch_label_box(
+        sheet.crop(FUTURE_CITY_BG_FAR.x, FUTURE_CITY_BG_FAR.y, FUTURE_CITY_BG_FAR.w, FUTURE_CITY_BG_FAR.h),
+        FUTURE_CITY_LABEL_RECT,
+    )
+    far = make_horizontally_seamless(far, blend_px=64)
+
+    mid_raw = sheet.crop(FUTURE_CITY_BG_MID.x, FUTURE_CITY_BG_MID.y, FUTURE_CITY_BG_MID.w, FUTURE_CITY_BG_MID.h)
+    mid_raw = patch_label_box(mid_raw, FUTURE_CITY_LABEL_RECT)
+    mid = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(mid_raw, (255, 0, 255), threshold=60))))
+
+    fore_raw = sheet.crop(FUTURE_CITY_BG_FORE.x, FUTURE_CITY_BG_FORE.y, FUTURE_CITY_BG_FORE.w, FUTURE_CITY_BG_FORE.h)
+    fore_raw = patch_label_box(fore_raw, FUTURE_CITY_LABEL_RECT)
+    fore = defringe_magenta_edges(strip_magenta_bleed_rows(remove_magenta_spill(chroma_key_flood_color(fore_raw, (255, 0, 255), threshold=60))))
+
+    # Ground 裁切框（見 `FUTURE_CITY_BG_GROUND` 校準說明）已經避開「地面平台」標籤
+    # 方框所在的 y 範圍，不需要（也不能）再套 `patch_label_box`。
+    ground_raw = sheet.crop(FUTURE_CITY_BG_GROUND.x, FUTURE_CITY_BG_GROUND.y, FUTURE_CITY_BG_GROUND.w, FUTURE_CITY_BG_GROUND.h)
+    ground = patch_magenta_columns(ground_raw)
+
+    return {"far": far, "mid": mid, "fore": fore, "ground": ground}
+
+
+def slice_future_city_props(sheet: Image) -> dict:
+    """賽博龐克霓虹夜城道具列切圖：手法與 `slice_steampunk_city_props` 完全一致（先蓋掉
+    整條道具列的標籤方框，再逐一裁切去背 + 依 `_FUTURE_CITY_DILATED_PROPS` 選細桿件
+    保護）。
+    """
+    region = FUTURE_CITY_PROPS_REGION
+    items = sheet.crop(region.x, region.y, region.w, region.h)
+    items = patch_label_box(items, FUTURE_CITY_PROPS_LABEL_RECT)
+    out = {}
+    for name, prop_region in FUTURE_CITY_PROP_REGIONS.items():
+        w = min(prop_region.w, items.width - prop_region.x)
+        h = min(prop_region.h, items.height - prop_region.y)
+        cropped = items.crop(prop_region.x, prop_region.y, w, h)
+        keyed = defringe_magenta_edges(remove_magenta_spill(chroma_key_flood_color(cropped, (255, 0, 255), threshold=60)))
+        if name in _FUTURE_CITY_DILATED_PROPS:
+            keyed = keep_largest_component_dilated(keyed, dilate_px=2)
+        else:
+            keyed = remove_small_components(keyed, min_area=20)
+        out[name] = autocrop(keyed)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 美術大改版第 3 波（`21_ASSET_OVERHAUL_PLAN.md` §3）：共用居民 NPC——泛用化
 # `RegionNpcScatter` 消費的美術改由**共享** `Resources/art/npc/<name>.png` 讀取（不再放在
 # 各地域 `regions/<r>/npc/` 底下），因為同一種 NPC（例如商人/旅人）會出現在多個地域，
@@ -2660,6 +2773,26 @@ def main() -> None:
             print(f"wrote {out_path} ({img.width}x{img.height})")
     else:
         print(f"note: {STEAMPUNK_CITY_SHEET} not found, skipping steampunk_city region slicing")
+
+    # --- 賽博龐克霓虹夜城（接手任務：steampunk_city 管線推廣，`design/future_city.png`）：
+    # 排進 15 地域循環，`FYW_DEBUG_REGION=future_city` 可直接截圖驗收。---
+    if os.path.exists(FUTURE_CITY_SHEET):
+        future_city_sheet = decode_png(FUTURE_CITY_SHEET)
+        print(f"future_city_sheet: {future_city_sheet.width}x{future_city_sheet.height}")
+
+        future_city_bg_dir = os.path.join(OUT_ROOT, "regions", "future_city", "bg")
+        for name, img in slice_future_city_bg(future_city_sheet).items():
+            out_path = os.path.join(future_city_bg_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+
+        future_city_props_dir = os.path.join(OUT_ROOT, "regions", "future_city", "props")
+        for name, img in slice_future_city_props(future_city_sheet).items():
+            out_path = os.path.join(future_city_props_dir, f"{name}.png")
+            encode_png(img, out_path)
+            print(f"wrote {out_path} ({img.width}x{img.height})")
+    else:
+        print(f"note: {FUTURE_CITY_SHEET} not found, skipping future_city region slicing")
 
 
 def inspect(sheet: Image) -> None:

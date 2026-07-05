@@ -146,6 +146,17 @@ public enum RegionNpcScatter {
         Slot(baseX: 770, npcName: "apothecary"),
     ]
 
+    /// 賽博龐克霓虹夜城地域槽位表（接手任務：steampunk_city 管線推廣到第八個 layered
+    /// 地域，`21` §3）：旅人/商人/學者/藥師——與 `steampunkCitySlots` 同款人口組成但獨立
+    /// 排法（重用既有共享 `npc/` 角色，不新增美術），銜接蒸氣龐克飛船城與天空村莊之間的
+    /// 過渡感，呼應霓虹夜城作為另一座科技樞紐的居民風格，維持兩座科技城的人口組成一致。
+    public static let futureCitySlots: [Slot] = [
+        Slot(baseX: 80, npcName: "traveler"),
+        Slot(baseX: 310, npcName: "merchant"),
+        Slot(baseX: 540, npcName: "scholar"),
+        Slot(baseX: 770, npcName: "apothecary"),
+    ]
+
     /// 依地域挑選 NPC 槽位表（`21` §3「NPC → 地域分配」）：尚無美術的骨架地域
     /// （riverlands/highlands/coastalReach）回傳空陣列，保底邏輯同 `PropScatter`
     /// 對應 case（它們不在 `RegionType.at(bandIndex:)` 的循環裡，本來就不會被選到）。
@@ -171,6 +182,8 @@ public enum RegionNpcScatter {
         case .holyCity: return holyCitySlots
         // 蒸氣龐克飛船城（接手任務，holy_city 管線推廣）：居民組成見 `steampunkCitySlots`。
         case .steampunkCity: return steampunkCitySlots
+        // 賽博龐克霓虹夜城（接手任務，steampunk_city 管線推廣）：居民組成見 `futureCitySlots`。
+        case .futureCity: return futureCitySlots
         }
     }
 

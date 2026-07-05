@@ -253,6 +253,19 @@ public enum PropScatter {
         Slot(baseX: 490, propName: "brass_telescope"),
     ]
 
+    /// 賽博龐克霓虹夜城地域槽位表（接手任務：steampunk_city 管線推廣到第八個 layered
+    /// 地域，`21` §2/§4）：道具池換成 `regions/future_city/props/` 切出的賽博龐克霓虹夜城
+    /// 道具（全息廣告牌/街燈/全息地球儀/發光水晶/無人機/霓虹櫻花盆栽等），間距手法同
+    /// `steampunkCitySlots`（確定性、依 `baseX` 遞增排列）。
+    public static let futureCitySlots: [Slot] = [
+        Slot(baseX: 40, propName: "holo_billboard"),
+        Slot(baseX: 130, propName: "street_lamp"),
+        Slot(baseX: 220, propName: "hologram_globe"),
+        Slot(baseX: 310, propName: "crystal"),
+        Slot(baseX: 400, propName: "drone"),
+        Slot(baseX: 490, propName: "neon_tree"),
+    ]
+
     /// 依地域挑選道具槽位表（`18` §3 / `19` §3「道具 scatter 依當前地域選該地域的道具池」）。
     /// 尚無專屬槽位表的骨架地域退回 `slots`（meadow），與 `RegionType.assetFolder` 同一保底邏輯。
     public static func slots(for region: RegionType) -> [Slot] {
@@ -279,6 +292,8 @@ public enum PropScatter {
         case .holyCity: return holyCitySlots
         // 蒸氣龐克飛船城（接手任務，holy_city 管線推廣）：道具池見 `steampunkCitySlots`。
         case .steampunkCity: return steampunkCitySlots
+        // 賽博龐克霓虹夜城（接手任務，steampunk_city 管線推廣）：道具池見 `futureCitySlots`。
+        case .futureCity: return futureCitySlots
         }
     }
 

@@ -58,6 +58,13 @@ public enum RegionType: Equatable, CaseIterable {
     /// 銜接雪山王國與天空村莊之間（雪山王國 → 蒸氣龐克飛船城 → 天空村莊，工業飛船城作為
     /// 銜接中世紀奇幻雪山與飄浮天界序列之間的過渡——齒輪與蒸汽動力把旅人送上天空）。
     case steampunkCity
+    /// 賽博龐克霓虹夜城（`design/future_city.png`，接手任務：把 steampunk_city 驗證過的
+    /// 「洋紅去背 + 真多層視差」管線推廣到第八個 layered 地域）：懸浮載具/霓虹全息廣告牌/
+    /// 懸浮平台/全息地球儀/水晶/霓虹櫻花樹/咖啡廳與大門招牌，冷紫藍霓虹夜色調，遠景含
+    /// 天空、中景/前景/道具皆洋紅底去背成透明（`isLayered`），地面平台不去背。排進循環，
+    /// 銜接蒸氣龐克飛船城與天空村莊之間（蒸氣龐克飛船城 → 賽博龐克霓虹夜城 → 天空村莊，
+    /// 兩座科技感城市相鄰成群，再過渡到飄浮天界序列作為寧靜的收尾對比）。
+    case futureCity
     /// 浮空魔法之城（`design/magic_city.png`，接手任務：把 hotspring/mountain_palace 驗證過的
     /// 「洋紅去背 + 真多層視差」管線推廣到第五個 layered 地域）：漂浮魔法之城，穹頂尖塔/
     /// 水晶噴泉/符文法陣/藍金紋章，遠景含天空、中景/前景/道具皆洋紅底去背成透明
@@ -74,13 +81,15 @@ public enum RegionType: Equatable, CaseIterable {
 
     /// 美術大改版第 2 波上線序列（`21` §2，第 3 波以 harbor 取代 seaCity；接手任務新增
     /// hotspringVillage、mountainPalace、再新增 snowMountain、magicCity、holyCity、
-    /// 再新增 steampunkCity）：14 地域循環，旅程節奏由近人到奇幻——草原 → 村莊A → 山谷 →
-    /// 王國 → 村莊B → 溫泉山村 → 海港 → 雪山王國 → 蒸氣龐克飛船城 → 天空村莊 → 仙俠山宮 →
-    /// 浮空魔法之城 → 聖光之城 → 天空魔法城 →（回到草原）。
+    /// 再新增 steampunkCity、再新增 futureCity）：15 地域循環，旅程節奏由近人到奇幻——
+    /// 草原 → 村莊A → 山谷 → 王國 → 村莊B → 溫泉山村 → 海港 → 雪山王國 → 蒸氣龐克飛船城 →
+    /// 賽博龐克霓虹夜城 → 天空村莊 → 仙俠山宮 → 浮空魔法之城 → 聖光之城 → 天空魔法城 →
+    /// （回到草原）。兩座科技感城市（蒸氣龐克飛船城、賽博龐克霓虹夜城）相鄰成群，之後
+    /// 才進入飄浮天界序列（天空村莊起）作為寧靜的收尾對比。
     /// `seaCity` 保留 case（休眠，不再進入循環，供未來重啟或参考）。其餘骨架 case
     /// （riverlands/highlands/coastalReach）保留給未來地域，暫不進入 `at(bandIndex:)` 的循環。
     private static let cycle: [RegionType] = [
-        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
+        .meadowOrigin, .village2, .valley, .kingdom, .village3, .hotspringVillage, .harbor, .snowMountain, .steampunkCity, .futureCity, .skyVillage, .mountainPalace, .magicCity, .holyCity, .skyCity,
     ]
 
     fileprivate static func at(bandIndex: Int) -> RegionType {
@@ -114,6 +123,7 @@ public enum RegionType: Equatable, CaseIterable {
         case .mountainPalace: return "mountain_palace"
         case .snowMountain: return "snow_mountain"
         case .steampunkCity: return "steampunk_city"
+        case .futureCity: return "future_city"
         case .magicCity: return "magic_city"
         case .holyCity: return "holy_city"
         }
@@ -124,8 +134,8 @@ public enum RegionType: Equatable, CaseIterable {
     /// `ParallaxBackground.buildRegion` 才會真的疊出 far+mid+fore+ground 四層。其餘地域仍是
     /// 舊格式（mid/fore 各自畫了整片天空，直接疊圖會露出多條天空線），維持「只渲染
     /// far+ground」的過渡 workaround。目前有 `harbor`/`hotspringVillage`/`mountainPalace`/
-    /// `snowMountain`/`steampunkCity`/`magicCity`/`holyCity`（皆已排進循環）。
-    private static let layeredRegions: Set<RegionType> = [.harbor, .hotspringVillage, .mountainPalace, .snowMountain, .steampunkCity, .magicCity, .holyCity]
+    /// `snowMountain`/`steampunkCity`/`futureCity`/`magicCity`/`holyCity`（皆已排進循環）。
+    private static let layeredRegions: Set<RegionType> = [.harbor, .hotspringVillage, .mountainPalace, .snowMountain, .steampunkCity, .futureCity, .magicCity, .holyCity]
 
     /// 本地域是否用新版「真多層視差」美術格式（見 `layeredRegions` 說明）。
     public var isLayered: Bool { RegionType.layeredRegions.contains(self) }

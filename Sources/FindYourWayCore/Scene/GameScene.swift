@@ -284,6 +284,9 @@ public final class GameScene: SKScene {
         // 蒸氣龐克飛船城（接手任務：holy_city 管線推廣到第七個 layered 地域，
         // `RegionType.steampunkCity`）。
         case "steampunk_city", "steampunkcity": return .steampunkCity
+        // 賽博龐克霓虹夜城（接手任務：steampunk_city 管線推廣到第八個 layered 地域，
+        // `RegionType.futureCity`）。
+        case "future_city", "futurecity": return .futureCity
         default: return nil
         }
     }
