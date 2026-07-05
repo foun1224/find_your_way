@@ -25,6 +25,12 @@ public enum RegionNpcScatter {
     /// 循環週期（點）：與 `PropScatter.span` 同值，確保畫面永遠有居民覆蓋、不會忽然露出一片空城。
     public static let span: Double = 900
 
+    /// 區域路人 NPC 是否渲染（使用者決定，2026-07-05：主角獨行世界先把沿街路人拿掉，
+    /// 讓畫面更聚焦在旅人本身）。可逆旗標——`false` 時 `ParallaxBackground.buildNpcNodes`
+    /// 直接不建任何 NPC 節點；槽位資料（`slots(for:)`/各 `*Slots`）原樣保留供測試與未來重啟，
+    /// 只是不再被渲染（同 `GameScene.companionEnabled` 的休眠模式）。翻成 `true` 即恢復。
+    public static let renderingEnabled = false
+
     /// 王國首都地域槽位表（沿用 Stage B+ 既有王國市民排法，士兵/衛兵隊長/貴族站崗巡邏交錯）——
     /// 美術大改版第 3 波把美術換成共享 `npc/` 資料夾裡的王室成員（`21` §3：國王/王后/公主/
     /// 大臣/騎士/衛兵）取代舊 `regions/kingdom/npc/{soldier,guard,noble}.png` 代表幀，

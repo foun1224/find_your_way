@@ -160,6 +160,9 @@ public enum ParallaxBackground {
         in container: SKNode,
         reducedMotion: Bool
     ) -> [(node: NpcNode, slot: RegionNpcScatter.Slot)] {
+        // 使用者決定（2026-07-05）：主角獨行世界先把沿街路人 NPC 拿掉。可逆旗標，
+        // `false` 時完全不建 NPC 節點（槽位資料仍在，供測試/未來重啟）。
+        guard RegionNpcScatter.renderingEnabled else { return [] }
         let region = RegionType.allCases.first { $0.assetFolder == regionFolder } ?? .meadowOrigin
         var result: [(node: NpcNode, slot: RegionNpcScatter.Slot)] = []
         for slot in RegionNpcScatter.slots(for: region) {

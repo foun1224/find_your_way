@@ -20,6 +20,15 @@ public final class CharacterNode: SKSpriteNode {
     /// 0.9s/循環 ≈ 悠閒但不月球漫步的散步節奏。
     private static let walkCycleDuration: TimeInterval = 0.9
 
+    /// 一個完整待機（idle）循環的秒數。刻意比走路（0.9s）慢很多——歇息時的呼吸/落葉節奏
+    /// 應該是「靜下來」的緩慢感（`02` §6 低喚醒、`22` §Stage P3 休息共振），4 幀 × ~1.4s ≈ 5.6s
+    /// 一輪，含一次極輕的吐氣與一片落葉，不會頻繁到變成搶注意力的動畫。
+    private static let idleCycleDuration: TimeInterval = 5.6
+
+    /// 待機 texture 循環 key（與 `walkCycle` 分開，互斥切換：歇息時停 walkCycle 起 idleCycle，
+    /// 起身時反向）。
+    private static let idleCycleKey = "idleCycle"
+
     /// 暖心回應動作 key（Phase 4d，`12` §5 / ADR-006 嚴格零功利：純情感、不影響任何邏輯狀態）。
     private static let warmResponseKey = "warmResponse"
 
@@ -83,6 +92,11 @@ public final class CharacterNode: SKSpriteNode {
     /// 與「靠近感應」共用。找不到時（素材尚未切出）優雅降級為「不做轉身，只停頓」。
     private var frontTextures: [SKTexture] = []
 
+    /// 側視待機 frame（`main_role_walk_v2.png` 下排「待機(Idle)」4 幀，含極輕微吐氣/落葉/star
+    /// 微互動，`char_hero/idle_*.png`）：供「陪你歇」長歇息時播放，取代凍結的靜止幀，讓餘光
+    /// 瞥見的旅人是「活著地歇著」（`22` §4 P1c）。找不到時優雅降級回原本的正面靜止姿勢。
+    private var idleTextures: [SKTexture] = []
+
     /// Reduce-motion 開關（由 `GameScene.motionEnabled` 反向驅動，`03` §1.5 / WCAG 2.3.3）：
     /// `true` 時停用**連續、無資訊內容的位移/縮放**裝飾動畫（呼吸 loop、暖心回應的跳動+縮放）——
     /// 這類動畫永遠在跑或可重複觸發，等同高頻率動態，對前庭敏感使用者是持續負擔。
@@ -124,6 +138,7 @@ public final class CharacterNode: SKSpriteNode {
             self.position = CGPoint(x: screenX, y: screenY)
             self.rightTextures = textures
             self.frontTextures = ArtCatalog.sequentialTextures(directory: "char_hero", prefix: "front_")
+            self.idleTextures = ArtCatalog.sequentialTextures(directory: "char_hero", prefix: "idle_")
             runWalkAnimation(textures: textures)
             if !reducedMotion {
                 runBreathing(period: Self.breathPeriodSeconds, amplitude: Self.breathScaleAmplitude)
@@ -158,6 +173,19 @@ public final class CharacterNode: SKSpriteNode {
         let timePerFrame = Self.walkCycleDuration / Double(textures.count)
         let animate = SKAction.animate(with: textures, timePerFrame: timePerFrame, resize: false, restore: false)
         run(SKAction.repeatForever(animate), withKey: "walkCycle")
+    }
+
+    /// 側視待機 texture 循環（`22` §4 P1c「活著地歇著」）：手法與 `runWalkAnimation` 一致
+    /// （純改 texture、不動 scale，與 `breathingKey` 呼吸 scale 互不衝突可同時跑），只是節奏
+    /// 慢很多（`idleCycleDuration`）。用獨立的 `idleCycleKey`，與走路 `walkCycle` 互斥切換。
+    private func runIdleAnimation() {
+        guard !idleTextures.isEmpty else { return }
+        for texture in idleTextures {
+            texture.filteringMode = .nearest
+        }
+        let timePerFrame = Self.idleCycleDuration / Double(idleTextures.count)
+        let animate = SKAction.animate(with: idleTextures, timePerFrame: timePerFrame, resize: false, restore: false)
+        run(SKAction.repeatForever(animate), withKey: Self.idleCycleKey)
     }
 
     /// 待機呼吸（`13_PSYCH_AUDIT.md` P1）：極緩的 scale 起伏，永遠疊在走路/看你之上，
@@ -314,15 +342,31 @@ public final class CharacterNode: SKSpriteNode {
     public func playAwayRestPose() {
         guard action(forKey: Self.restKey) == nil else { return }
 
-        // 呼吸切換獨立於姿態貼圖：即使 `front_` 幀未切出（下面的優雅降級 early-return），
+        // 呼吸切換獨立於姿態貼圖：即使姿態幀未切出（下面的優雅降級 early-return），
         // 「陪你歇」時休息呼吸仍應該生效——這是呼吸本身的行為，不依賴有沒有轉身視覺。
         switchToRestBreathing()
 
+        let half = HeroRestSchedule.transitionDurationSeconds / 2
+
+        // 優先：側視待機動畫（`22` §4 P1c「活著地歇著」，不是凍結幀）。淡出走路 → 起 idle 循環
+        // → 淡回。維持朝右側視（不轉正面）——長歇息時的呼吸/落葉更像自然待著；正面「看你」的
+        // 連結時刻仍由 `playRestLookAtViewer` 的一瞥保留。
+        if !idleTextures.isEmpty {
+            removeAction(forKey: "walkCycle")
+            let dimOut = SKAction.fadeAlpha(to: Self.restTransitionDimAlpha, duration: half)
+            dimOut.timingMode = .easeInEaseOut
+            let toIdle = SKAction.run { [weak self] in self?.runIdleAnimation() }
+            let brighten = SKAction.fadeAlpha(to: 1.0, duration: half)
+            brighten.timingMode = .easeInEaseOut
+            run(SKAction.sequence([dimOut, toIdle, brighten]), withKey: Self.restKey)
+            return
+        }
+
+        // 降級：無 idle 幀時退回原本「轉正面靜止姿勢」（需有 front_ 幀）。
         guard let frontTexture = frontTextures.first, !rightTextures.isEmpty else { return }
 
         removeAction(forKey: "walkCycle")
 
-        let half = HeroRestSchedule.transitionDurationSeconds / 2
         let dimOut = SKAction.fadeAlpha(to: Self.restTransitionDimAlpha, duration: half)
         dimOut.timingMode = .easeInEaseOut
         let toFront = SKAction.run { [weak self] in self?.texture = frontTexture }
@@ -335,6 +379,8 @@ public final class CharacterNode: SKSpriteNode {
     /// 同樣只用 alpha 過場（無位移/縮放）。
     public func endAwayRestPose() {
         removeAction(forKey: Self.restKey)
+        // 停掉側視待機循環（若正在跑）——否則 idleCycle 與待會兒的 walkCycle 會同時搶改 texture。
+        removeAction(forKey: Self.idleCycleKey)
         switchToWalkBreathing()
         guard !rightTextures.isEmpty else { return }
 
@@ -368,6 +414,8 @@ public final class CharacterNode: SKSpriteNode {
             }
         }
 
+        // idle 循環也要一起 reset（可能卡在「陪你歇」的側視待機中）。
+        removeAction(forKey: Self.idleCycleKey)
         guard action(forKey: Self.restKey) != nil else { return }
         removeAction(forKey: Self.restKey)
         alpha = 1.0
