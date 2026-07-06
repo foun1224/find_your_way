@@ -74,7 +74,7 @@ FYW_DEBUG_WEATHER=<晴/陰/雨>         # 強制天氣
 
 ## 聯繫
 
-Sean Chen (foun1224@gmail.com)
+Sean Chen
 
 ---
 

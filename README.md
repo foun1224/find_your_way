@@ -99,4 +99,4 @@ FYW_DEBUG_WEATHER=<晴|陰|雨>
 
 ---
 
-*Sean Chen · foun1224@gmail.com*
+*Sean Chen*
